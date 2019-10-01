@@ -477,8 +477,8 @@ inline int CPUUpdateTicks()
 {
     int cpuLoopTicks = lcdTicks;
 
-    //if (soundTicks < cpuLoopTicks)
-        //cpuLoopTicks = soundTicks;
+    if (soundTicks < cpuLoopTicks)
+        cpuLoopTicks = soundTicks;
 
     if (timer0On && (timer0Ticks < cpuLoopTicks)) {
         cpuLoopTicks = timer0Ticks;
@@ -1815,8 +1815,6 @@ void CPUSwitchMode(int mode, bool saveState, bool breakLoop)
 {
     //  if(armMode == mode)
     //    return;
-
-    log("mode = %x saveState = %d breakloop = %d\n", mode, saveState, breakLoop);
 
     CPUUpdateCPSR();
 
@@ -3602,7 +3600,7 @@ void CPUInterrupt()
 }
 
 static uint32_t joy;
-static bool has_frames;
+static bool hasFrames;
 
 static void gbaUpdateJoypads(void)
 {
@@ -3612,7 +3610,6 @@ static void gbaUpdateJoypads(void)
         joy = systemReadJoypad(-1);
 
     P1 = 0x03FF ^ (joy & 0x3FF);
-    systemUpdateMotionSensor();
     UPDATE_REG(0x130, P1);
     uint16_t P1CNT = READ16LE(((uint16_t*)&ioMem[0x132]));
 
@@ -3633,6 +3630,8 @@ static void gbaUpdateJoypads(void)
             }
         }
     }
+
+    systemUpdateMotionSensor();
 }
 
 void CPULoop(int ticks)
@@ -3648,10 +3647,13 @@ void CPULoop(int ticks)
 //cpuNextEvent = 1;
 #endif
 
+    hasFrames = false;
     cpuBreakLoop = false;
     cpuNextEvent = CPUUpdateTicks();
     if (cpuNextEvent > ticks)
         cpuNextEvent = ticks;
+
+    gbaUpdateJoypads();
 
     for (;;) {
         if (!holdState && !SWITicks) {
@@ -3698,8 +3700,6 @@ void CPULoop(int ticks)
             }
 
             lcdTicks -= clockTicks;
-
-            soundTicks += clockTicks;
 
             if (lcdTicks <= 0) {
                 if (DISPSTAT & 1) { // V-BLANK
@@ -3818,8 +3818,6 @@ void CPULoop(int ticks)
                             }
                             CPUCheckDMA(1, 0x0f);
 
-                            psoundTickfn();
-
                             if (frameCount >= framesToSkip) {
                                 systemDrawScreen();
                                 frameCount = 0;
@@ -3828,7 +3826,7 @@ void CPULoop(int ticks)
                             if (systemPauseOnFrame())
                                 ticks = 0;
 
-                            has_frames = true;
+                            hasFrames = true;
                         }
 
                         UPDATE_REG(0x04, DISPSTAT);
@@ -3957,11 +3955,11 @@ void CPULoop(int ticks)
             // if sound is disabled, so in stop state, soundTick will just produce
             // mute sound
 
-            //soundTicks -= clockTicks;
-            //if (soundTicks <= 0) {
-                //psoundTickfn();
-                //soundTicks += SOUND_CLOCK_TICKS;
-            //}
+            soundTicks -= clockTicks;
+            if (soundTicks <= 0) {
+                psoundTickfn();
+                soundTicks += SOUND_CLOCK_TICKS;
+            }
 
             if (!stopState) {
                 if (timer0On) {
@@ -4167,7 +4165,7 @@ void CPULoop(int ticks)
                 cpuNextEvent = ticks;
 
             // end loop when a frame is done
-            if (ticks <= 0 || cpuBreakLoop || has_frames)
+            if (ticks <= 0 || cpuBreakLoop || hasFrames)
                 break;
         }
     }
@@ -4177,25 +4175,9 @@ void CPULoop(int ticks)
 #endif
 }
 
-void gbaEmulate(int ticks)
-{
-    has_frames = false;
-
-    // Read and process inputs
-    gbaUpdateJoypads();
-
-    // Runs nth number of ticks till vblank, outputs audio
-    // then the video frames.
-    // sanity check:
-    // wrapped in loop in case frames has not been written yet
-    do {
-        CPULoop(ticks);
-    } while (!has_frames);
-}
-
 struct EmulatedSystem GBASystem = {
     // emuMain
-    gbaEmulate,
+    CPULoop,
     // emuReset
     CPUReset,
     // emuCleanUp
@@ -4208,7 +4190,7 @@ struct EmulatedSystem GBASystem = {
     CPUReadState,
     // emuWriteState
     CPUWriteState,
-// emuReadMemState
+    // emuReadMemState
 #ifdef __LIBRETRO__
     NULL,
 #else

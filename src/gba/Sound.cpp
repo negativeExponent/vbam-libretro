@@ -38,7 +38,7 @@ SoundDriver* soundDriver = 0;
 
 extern bool stopState; // TODO: silence sound when true
 
-int const SOUND_CLOCK_TICKS_ = 167772; // 1/100 second
+int const SOUND_CLOCK_TICKS_ = 280896; //167772; // 1/100 second
 
 static uint16_t soundFinalWave[1600];
 long soundSampleRate = 44100;
@@ -128,7 +128,7 @@ void Gba_Pcm::apply_control(int idx)
     if (output != out) {
         if (output) {
             output->set_modified();
-            pcm_synth[0].offset(soundTicks, -last_amp, output);
+            pcm_synth[0].offset((SOUND_CLOCK_TICKS - soundTicks), -last_amp, output);
         }
         last_amp = 0;
         output = out;
@@ -148,7 +148,7 @@ void Gba_Pcm::end_frame(blip_time_t time)
 void Gba_Pcm::update(int dac)
 {
     if (output) {
-        blip_time_t time = soundTicks;
+        blip_time_t time = (SOUND_CLOCK_TICKS - soundTicks);
 
         dac = (int8_t)dac >> shift;
         int delta = dac - last_amp;
@@ -182,8 +182,8 @@ void Gba_Pcm_Fifo::timer_overflowed(int which_timer)
             // Need to fill FIFO
             int saved_count = count;
             CPUCheckDMA(3, which ? 4 : 2);
-            if (saved_count == 0 && count == 16)
-                CPUCheckDMA(3, which ? 4 : 2);
+            //if (saved_count == 0 && count == 16)
+                //CPUCheckDMA(3, which ? 4 : 2);
             if (count == 0) {
                 // Not filled by DMA, so fill with 16 bytes of silence
                 int reg = which ? FIFOB_L : FIFOA_L;
@@ -256,7 +256,7 @@ void soundEvent8(uint32_t address, uint8_t data)
     int gb_addr = gba_to_gb_sound(address);
     if (gb_addr) {
         ioMem[address] = data;
-        gb_apu->write_register(soundTicks, gb_addr, data);
+        gb_apu->write_register((SOUND_CLOCK_TICKS - soundTicks), gb_addr, data);
 
         if (address == NR52)
             apply_control();
@@ -387,7 +387,7 @@ void psoundTickfn()
 {
     if (gb_apu && stereo_buffer) {
         // Run sound hardware to present
-        end_frame(soundTicks);
+        end_frame(SOUND_CLOCK_TICKS);
 
         flush_samples(stereo_buffer);
 
@@ -397,8 +397,6 @@ void psoundTickfn()
         if (soundVolume_ != soundVolume)
             apply_volume();
     }
-
-    soundTicks = 0;
 }
 
 static void apply_muting()
@@ -428,7 +426,7 @@ static void reset_apu()
     if (stereo_buffer)
         stereo_buffer->clear();
 
-    soundTicks = 0;
+    soundTicks = SOUND_CLOCK_TICKS;
 }
 
 static void remake_stereo_buffer()
@@ -523,7 +521,8 @@ void soundReset()
     reset_apu();
 
     soundPaused = true;
-    soundTicks = 0;
+    SOUND_CLOCK_TICKS = SOUND_CLOCK_TICKS_;
+    soundTicks        = SOUND_CLOCK_TICKS_;
 
     soundEvent8(NR52, (uint8_t)0x80);
 }
