@@ -54,94 +54,59 @@ extern uint8_t memoryWaitSeq[16];
 extern uint8_t memoryWaitSeq32[16];
 extern uint8_t cpuBitsSet[256];
 extern uint8_t cpuLowestBitSet[256];
-extern void CPUSwitchMode(int mode, bool saveState, bool breakLoop);
-extern void CPUSwitchMode(int mode, bool saveState);
 extern void CPUUpdateCPSR();
+extern void CPUSwitchMode(int mode, bool saveState, bool breakLoop);
 extern void CPUUpdateFlags(bool breakLoop);
-extern void CPUUpdateFlags();
-extern void CPUUndefinedException();
-extern void CPUSoftwareInterrupt();
 extern void CPUSoftwareInterrupt(int comment);
 
+enum {
+    BITS_16 = 0,
+    BITS_32 = 1
+};
+
+#define DATATICKS_ACCESS_16(addr)     memoryWait[((addr) >> 24) & 15]
+#define DATATICKS_ACCESS_32(addr)     memoryWait32[((addr) >> 24) & 15]
+#define DATATICKS_ACCESS_16_SEQ(addr) memoryWaitSeq[((addr) >> 24) & 15]
+#define DATATICKS_ACCESS_32_SEQ(addr) memoryWaitSeq32[((addr) >> 24) & 15]
+
 // Waitstates when accessing data
-inline int dataTicksAccess16(uint32_t address) // DATA 8/16bits NON SEQ
+inline void updateBusPrefetchCount(uint32_t address, int value)
 {
     int addr = (address >> 24) & 15;
-    int value = memoryWait[addr];
-
-    if ((addr >= 0x08) || (addr < 0x02)) {
+    switch (addr) {
+    case 0x00:
+    case 0x01:
+    case 0x08:
+    case 0x09:
+    case 0x0A:
+    case 0x0B:
+    case 0x0C:
+    case 0x0D:
+    case 0x0E:
+    case 0x0F:
         busPrefetchCount = 0;
         busPrefetch = false;
-    } else if (busPrefetch) {
-        int waitState = value;
-        if (!waitState)
-            waitState = 1;
-        busPrefetchCount = ((busPrefetchCount + 1) << waitState) - 1;
+        return;
+    default:
+        if (busPrefetch) {
+            int waitState = value;
+            waitState = (1 & ~waitState) | (waitState & waitState);
+            busPrefetchCount = ((busPrefetchCount + 1) << waitState) - 1;
+        }
     }
-
-    return value;
-}
-
-inline int dataTicksAccess32(uint32_t address) // DATA 32bits NON SEQ
-{
-    int addr = (address >> 24) & 15;
-    int value = memoryWait32[addr];
-
-    if ((addr >= 0x08) || (addr < 0x02)) {
-        busPrefetchCount = 0;
-        busPrefetch = false;
-    } else if (busPrefetch) {
-        int waitState = value;
-        if (!waitState)
-            waitState = 1;
-        busPrefetchCount = ((busPrefetchCount + 1) << waitState) - 1;
-    }
-
-    return value;
-}
-
-inline int dataTicksAccessSeq16(uint32_t address) // DATA 8/16bits SEQ
-{
-    int addr = (address >> 24) & 15;
-    int value = memoryWaitSeq[addr];
-
-    if ((addr >= 0x08) || (addr < 0x02)) {
-        busPrefetchCount = 0;
-        busPrefetch = false;
-    } else if (busPrefetch) {
-        int waitState = value;
-        if (!waitState)
-            waitState = 1;
-        busPrefetchCount = ((busPrefetchCount + 1) << waitState) - 1;
-    }
-
-    return value;
-}
-
-inline int dataTicksAccessSeq32(uint32_t address) // DATA 32bits SEQ
-{
-    int addr = (address >> 24) & 15;
-    int value = memoryWaitSeq32[addr];
-
-    if ((addr >= 0x08) || (addr < 0x02)) {
-        busPrefetchCount = 0;
-        busPrefetch = false;
-    } else if (busPrefetch) {
-        int waitState = value;
-        if (!waitState)
-            waitState = 1;
-        busPrefetchCount = ((busPrefetchCount + 1) << waitState) - 1;
-    }
-
-    return value;
 }
 
 // Waitstates when executing opcode
-inline int codeTicksAccess16(uint32_t address) // THUMB NON SEQ
+inline int codeTicksAccess(int bits32, uint32_t address) // ARM/THUMB NON SEQ
 {
     int addr = (address >> 24) & 15;
-
-    if ((addr >= 0x08) && (addr <= 0x0D)) {
+    switch (addr) {
+    case 0x08:
+    case 0x09:
+    case 0x0A:
+    case 0x0B:
+    case 0x0C:
+    case 0x0D:
         if (busPrefetchCount & 0x1) {
             if (busPrefetchCount & 0x2) {
                 busPrefetchCount = ((busPrefetchCount & 0xFF) >> 2) | (busPrefetchCount & 0xFFFFFF00);
@@ -149,62 +114,49 @@ inline int codeTicksAccess16(uint32_t address) // THUMB NON SEQ
             }
             busPrefetchCount = ((busPrefetchCount & 0xFF) >> 1) | (busPrefetchCount & 0xFFFFFF00);
             return memoryWaitSeq[addr] - 1;
-        } else {
-            busPrefetchCount = 0;
-            return memoryWait[addr];
         }
-    } else {
-        busPrefetchCount = 0;
-        return memoryWait[addr];
     }
-}
 
-inline int codeTicksAccess32(uint32_t address) // ARM NON SEQ
-{
-    int addr = (address >> 24) & 15;
-
-    if ((addr >= 0x08) && (addr <= 0x0D)) {
-        if (busPrefetchCount & 0x1) {
-            if (busPrefetchCount & 0x2) {
-                busPrefetchCount = ((busPrefetchCount & 0xFF) >> 2) | (busPrefetchCount & 0xFFFFFF00);
-                return 0;
-            }
-            busPrefetchCount = ((busPrefetchCount & 0xFF) >> 1) | (busPrefetchCount & 0xFFFFFF00);
-            return memoryWaitSeq[addr] - 1;
-        } else {
-            busPrefetchCount = 0;
-            return memoryWait32[addr];
-        }
-    } else {
-        busPrefetchCount = 0;
-        return memoryWait32[addr];
-    }
+    busPrefetchCount = 0;
+    return bits32 ? memoryWait32[addr] : memoryWait[addr];
 }
 
 inline int codeTicksAccessSeq16(uint32_t address) // THUMB SEQ
 {
     int addr = (address >> 24) & 15;
-
-    if ((addr >= 0x08) && (addr <= 0x0D)) {
+    switch (addr) {
+    case 0x08:
+    case 0x09:
+    case 0x0A:
+    case 0x0B:
+    case 0x0C:
+    case 0x0D:
         if (busPrefetchCount & 0x1) {
             busPrefetchCount = ((busPrefetchCount & 0xFF) >> 1) | (busPrefetchCount & 0xFFFFFF00);
             return 0;
-        } else if (busPrefetchCount > 0xFF) {
+        }
+        if (busPrefetchCount > 0xFF) {
             busPrefetchCount = 0;
             return memoryWait[addr];
-        } else
-            return memoryWaitSeq[addr];
-    } else {
+        }
+        break;
+    default:
         busPrefetchCount = 0;
-        return memoryWaitSeq[addr];
     }
+
+    return memoryWaitSeq[addr];
 }
 
 inline int codeTicksAccessSeq32(uint32_t address) // ARM SEQ
 {
     int addr = (address >> 24) & 15;
-
-    if ((addr >= 0x08) && (addr <= 0x0D)) {
+    switch (addr) {
+    case 0x08:
+    case 0x09:
+    case 0x0A:
+    case 0x0B:
+    case 0x0C:
+    case 0x0D:
         if (busPrefetchCount & 0x1) {
             if (busPrefetchCount & 0x2) {
                 busPrefetchCount = ((busPrefetchCount & 0xFF) >> 2) | (busPrefetchCount & 0xFFFFFF00);
@@ -212,14 +164,14 @@ inline int codeTicksAccessSeq32(uint32_t address) // ARM SEQ
             }
             busPrefetchCount = ((busPrefetchCount & 0xFF) >> 1) | (busPrefetchCount & 0xFFFFFF00);
             return memoryWaitSeq[addr];
-        } else if (busPrefetchCount > 0xFF) {
+        }
+        if (busPrefetchCount > 0xFF) {
             busPrefetchCount = 0;
             return memoryWait32[addr];
-        } else
-            return memoryWaitSeq32[addr];
-    } else {
-        return memoryWaitSeq32[addr];
+        }
     }
+
+    return memoryWaitSeq32[addr];
 }
 
 // Emulates the Cheat System (m) code

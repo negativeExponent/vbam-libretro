@@ -1795,11 +1795,6 @@ void CPUUpdateFlags(bool breakLoop)
     }
 }
 
-void CPUUpdateFlags()
-{
-    CPUUpdateFlags(true);
-}
-
 #ifdef WORDS_BIGENDIAN
 static void CPUSwap(volatile uint32_t* a, volatile uint32_t* b)
 {
@@ -1820,6 +1815,8 @@ void CPUSwitchMode(int mode, bool saveState, bool breakLoop)
 {
     //  if(armMode == mode)
     //    return;
+
+    log("mode = %x saveState = %d breakloop = %d\n", mode, saveState, breakLoop);
 
     CPUUpdateCPSR();
 
@@ -1930,38 +1927,19 @@ void CPUSwitchMode(int mode, bool saveState, bool breakLoop)
     CPUUpdateCPSR();
 }
 
-void CPUSwitchMode(int mode, bool saveState)
-{
-    CPUSwitchMode(mode, saveState, true);
-}
-
-void CPUUndefinedException()
-{
-    uint32_t PC = reg[15].I;
-    bool savedArmState = armState;
-    CPUSwitchMode(0x1b, true, false);
-    reg[14].I = PC - (savedArmState ? 4 : 2);
-    reg[15].I = 0x04;
-    armState = true;
-    armIrqEnable = false;
-    armNextPC = 0x04;
-    ARM_PREFETCH;
-    reg[15].I += 4;
-}
-
-void CPUSoftwareInterrupt()
-{
-    uint32_t PC = reg[15].I;
-    bool savedArmState = armState;
-    CPUSwitchMode(0x13, true, false);
-    reg[14].I = PC - (savedArmState ? 4 : 2);
-    reg[15].I = 0x08;
-    armState = true;
-    armIrqEnable = false;
-    armNextPC = 0x08;
-    ARM_PREFETCH;
-    reg[15].I += 4;
-}
+#define CPU_SOFTWARE_INTERRUPT()                  \
+    {                                             \
+        uint32_t PC = reg[15].I;                  \
+        bool savedArmState = armState;            \
+        CPUSwitchMode(0x13, true, false);         \
+        reg[14].I = PC - (savedArmState ? 4 : 2); \
+        reg[15].I = 0x08;                         \
+        armState = true;                          \
+        armIrqEnable = false;                     \
+        armNextPC = 0x08;                         \
+        ARM_PREFETCH;                             \
+        reg[15].I += 4;                           \
+    }
 
 void CPUSoftwareInterrupt(int comment)
 {
@@ -2016,13 +1994,13 @@ void CPUSoftwareInterrupt(int comment)
         }
 #endif
         if ((comment & 0xF8) != 0xE0) {
-            CPUSoftwareInterrupt();
+            CPU_SOFTWARE_INTERRUPT();
             return;
         } else {
             if (CheckEReaderRegion())
                 BIOS_EReader_ScanCard(comment);
             else
-                CPUSoftwareInterrupt();
+                CPU_SOFTWARE_INTERRUPT();
             return;
         }
     }
@@ -2071,7 +2049,7 @@ void CPUSoftwareInterrupt(int comment)
                 VCOUNT);
         }
 #endif
-        CPUSoftwareInterrupt();
+        CPU_SOFTWARE_INTERRUPT();
         break;
     case 0x05:
 #ifdef GBA_LOGGING
@@ -2080,13 +2058,11 @@ void CPUSoftwareInterrupt(int comment)
                 VCOUNT);
         }
 #endif
-        CPUSoftwareInterrupt();
+        CPU_SOFTWARE_INTERRUPT();
         break;
     case 0x06:
-        CPUSoftwareInterrupt();
-        break;
     case 0x07:
-        CPUSoftwareInterrupt();
+        CPU_SOFTWARE_INTERRUPT();
         break;
     case 0x08:
         BIOS_Sqrt();
