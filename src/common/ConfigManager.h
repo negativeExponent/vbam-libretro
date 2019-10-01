@@ -2,7 +2,7 @@
 #define _CONFIGMANAGER_H
 
 #pragma once
-#include "../sdl/filters.h"
+//#include "../sdl/filters.h"
 #include <stdio.h>
 
 #ifndef __GNUC__
@@ -158,8 +158,8 @@ extern char *patchNames[PATCH_MAX_NUM]; // and so on
 
 extern int mouseCounter;
 
-extern FilterFunc filterFunction;
-extern IFBFilterFunc ifbFunction;
+//extern FilterFunc filterFunction;
+//extern IFBFilterFunc ifbFunction;
 
 extern char *homeDir;
 extern const char *screenShotDir;
