@@ -10,6 +10,7 @@ vsbuild/*
 cmake-build*
 dependencies/*
 vcpkg/*
+.vscode/*
 .vs/*
 .idea
 *.o

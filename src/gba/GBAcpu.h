@@ -1,6 +1,8 @@
 #ifndef GBACPU_H
 #define GBACPU_H
 
+#include "Globals.h"
+
 extern int armExecute();
 extern int thumbExecute();
 

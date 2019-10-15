@@ -20,6 +20,7 @@
 
 #ifdef __LIBRETRO__
 #include <stdint.h>
+#include <string.h>
 #else
 #include <zlib.h>
 #include "cstdint.h"

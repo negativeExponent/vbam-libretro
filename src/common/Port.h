@@ -49,14 +49,14 @@ static inline uint32_t swap32(uint32_t v)
 #else
 #define READ16LE(x) swap16(*((uint16_t *)(x)))
 #define READ32LE(x) swap32(*((uint32_t *)(x)))
-#define WRITE16LE(x, v) *((uint16_t *)x) = swap16((v))
-#define WRITE32LE(x, v) *((uint32_t *)x) = swap32((v))
+#define WRITE16LE(x, v) *((uint16_t *)(x)) = swap16((v))
+#define WRITE32LE(x, v) *((uint32_t *)(x)) = swap32((v))
 #endif
 #else
-#define READ16LE(x) *((uint16_t *)x)
-#define READ32LE(x) *((uint32_t *)x)
-#define WRITE16LE(x, v) *((uint16_t *)x) = (v)
-#define WRITE32LE(x, v) *((uint32_t *)x) = (v)
+#define READ16LE(x) *((uint16_t *)(x))
+#define READ32LE(x) *((uint32_t *)(x))
+#define WRITE16LE(x, v) *((uint16_t *)(x)) = (v)
+#define WRITE32LE(x, v) *((uint32_t *)(x)) = (v)
 #endif
 
 #endif // PORT_H

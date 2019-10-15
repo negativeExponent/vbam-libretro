@@ -1506,7 +1506,7 @@ int CPULoadRom(const char* szFile)
 
     uint16_t* temp = (uint16_t*)(rom + ((romSize + 1) & ~1));
     int i;
-    for (i = (romSize + 1) & ~1; i < romSize; i += 2) {
+    for (i = (romSize + 1) & ~1; i < SIZE_ROM; i += 2) {
         WRITE16LE(temp, (i >> 1) & 0xFFFF);
         temp++;
     }
@@ -1599,7 +1599,7 @@ int CPULoadRomData(const char* data, int size)
 
     uint16_t* temp = (uint16_t*)(rom + ((romSize + 1) & ~1));
     int i;
-    for (i = (romSize + 1) & ~1; i < romSize; i += 2) {
+    for (i = (romSize + 1) & ~1; i < SIZE_ROM; i += 2) {
         WRITE16LE(temp, (i >> 1) & 0xFFFF);
         temp++;
     }
@@ -3593,10 +3593,11 @@ void CPUInterrupt()
     ARM_PREFETCH;
 
     //  if(!holdState)
-    biosProtected[0] = 0x02;
-    biosProtected[1] = 0xc0;
-    biosProtected[2] = 0x5e;
-    biosProtected[3] = 0xe5;
+    //biosProtected[0] = 0x02;
+    //biosProtected[1] = 0xc0;
+    //biosProtected[2] = 0x5e;
+    //biosProtected[3] = 0xe5;
+    WRITE32LE((uint32_t*)&biosProtected, 0xe3a02004);
 }
 
 static uint32_t joy;

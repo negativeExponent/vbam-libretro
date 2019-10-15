@@ -29,6 +29,7 @@ SOURCES_CXX += \
 	$(CORE_DIR)/apu/Gb_Apu.cpp
 
 SOURCES_CXX += \
+	$(CORE_DIR)/gba/GBAmemory.cpp \
 	$(CORE_DIR)/gba/GBA-thumb.cpp \
 	$(CORE_DIR)/gba/Sound.cpp \
 	$(CORE_DIR)/gba/Mode1.cpp \

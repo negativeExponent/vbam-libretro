@@ -1,6 +1,8 @@
 #ifndef GBA_GBALINK_H
 #define GBA_GBALINK_H
 
+#include "../common/Types.h"
+
 /**
  * Link modes to be passed to InitLink
  */
