@@ -12,8 +12,8 @@ extern void eepromReadGame(gzFile _gzFile, int version);
 extern void eepromReadGameSkip(gzFile _gzFile, int version);
 #endif
 extern uint8_t eepromData[0x2000];
-extern int eepromRead(uint32_t address);
-extern void eepromWrite(uint32_t address, uint8_t value);
+extern int eepromRead(void);
+extern void eepromWrite(uint8_t value);
 extern void eepromInit();
 extern void eepromReset();
 extern bool eepromInUse;

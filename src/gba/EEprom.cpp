@@ -95,7 +95,7 @@ void eepromReadGameSkip(gzFile gzFile, int version)
 }
 #endif
 
-int eepromRead(uint32_t /* address */)
+int eepromRead(void)
 {
     switch (eepromMode) {
     case EEPROM_IDLE:
@@ -128,7 +128,7 @@ int eepromRead(uint32_t /* address */)
     return 1;
 }
 
-void eepromWrite(uint32_t /* address */, uint8_t value)
+void eepromWrite(uint8_t value)
 {
     if (cpuDmaCount == 0)
         return;

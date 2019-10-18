@@ -87,7 +87,7 @@ uint32_t CPUReadMemory(uint32_t address)
          if (cpuEEPROMEnabled)
          // no need to swap this
          {
-            return eepromRead(address);
+            return eepromRead();
          }
          goto unreadable;
       case 14:
@@ -232,7 +232,7 @@ uint32_t CPUReadHalfWord(uint32_t address)
          if (cpuEEPROMEnabled)
          // no need to swap this
          {
-            return eepromRead(address);
+            return eepromRead();
          }
          goto unreadable;
       case 14:
@@ -331,7 +331,7 @@ uint8_t CPUReadByte(uint32_t address)
       case 13:
          if (cpuEEPROMEnabled)
          {
-            return eepromRead(address);
+            return eepromRead();
          }
          else
          {
@@ -416,7 +416,7 @@ void CPUWriteMemory(uint32_t address, uint32_t value)
       case 0x0D:
          if (cpuEEPROMEnabled)
          {
-            eepromWrite(address, value);
+            eepromWrite(value);
          }
          break;
       case 0x0E:
@@ -476,7 +476,7 @@ void CPUWriteHalfWord(uint32_t address, uint16_t value)
       case 13:
          if (cpuEEPROMEnabled)
          {
-            eepromWrite(address, (uint8_t)value);
+            eepromWrite((uint8_t)value);
          }
          break;
       case 14:
@@ -601,7 +601,7 @@ void CPUWriteByte(uint32_t address, uint8_t value)
       case 13:
          if (cpuEEPROMEnabled)
          {
-            eepromWrite(address, value);
+            eepromWrite(value);
          }
          break;
       case 14:
