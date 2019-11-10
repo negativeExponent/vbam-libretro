@@ -2,41 +2,29 @@
 #include "GBAGfx.h"
 #include "Globals.h"
 
-void mode0RenderLine()
+void mode0RenderLine(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (DISPCNT & 0x80) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        return;
-    }
-
     if (layerEnable & 0x0100) {
-        gfxDrawTextScreen(BG0CNT, BG0HOFS, BG0VOFS, line0);
+        gfxDrawTextScreen(&lcd_bg[0], palette, line0);
     }
 
     if (layerEnable & 0x0200) {
-        gfxDrawTextScreen(BG1CNT, BG1HOFS, BG1VOFS, line1);
+        gfxDrawTextScreen(&lcd_bg[1], palette, line1);
     }
 
     if (layerEnable & 0x0400) {
-        gfxDrawTextScreen(BG2CNT, BG2HOFS, BG2VOFS, line2);
+        gfxDrawTextScreen(&lcd_bg[2], palette, line2);
     }
 
     if (layerEnable & 0x0800) {
-        gfxDrawTextScreen(BG3CNT, BG3HOFS, BG3VOFS, line3);
+        gfxDrawTextScreen(&lcd_bg[3], palette, line3);
     }
 
-    gfxDrawSprites(lineOBJ);
+    gfxDrawSprites();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -110,45 +98,33 @@ void mode0RenderLine()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
 }
 
-void mode0RenderLineNoWindow()
+void mode0RenderLineNoWindow(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (DISPCNT & 0x80) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        return;
-    }
-
     if (layerEnable & 0x0100) {
-        gfxDrawTextScreen(BG0CNT, BG0HOFS, BG0VOFS, line0);
+        gfxDrawTextScreen(&lcd_bg[0], palette, line0);
     }
 
     if (layerEnable & 0x0200) {
-        gfxDrawTextScreen(BG1CNT, BG1HOFS, BG1VOFS, line1);
+        gfxDrawTextScreen(&lcd_bg[1], palette, line1);
     }
 
     if (layerEnable & 0x0400) {
-        gfxDrawTextScreen(BG2CNT, BG2HOFS, BG2VOFS, line2);
+        gfxDrawTextScreen(&lcd_bg[2], palette, line2);
     }
 
     if (layerEnable & 0x0800) {
-        gfxDrawTextScreen(BG3CNT, BG3HOFS, BG3VOFS, line3);
+        gfxDrawTextScreen(&lcd_bg[3], palette, line3);
     }
 
-    gfxDrawSprites(lineOBJ);
+    gfxDrawSprites();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     int effect = (BLDMOD >> 6) & 3;
 
@@ -282,20 +258,13 @@ void mode0RenderLineNoWindow()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
 }
 
-void mode0RenderLineAll()
+void mode0RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-
-    if (DISPCNT & 0x80) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        return;
-    }
 
     bool inWindow0 = false;
     bool inWindow1 = false;
@@ -320,30 +289,25 @@ void mode0RenderLineAll()
     }
 
     if ((layerEnable & 0x0100)) {
-        gfxDrawTextScreen(BG0CNT, BG0HOFS, BG0VOFS, line0);
+        gfxDrawTextScreen(&lcd_bg[0], palette, line0);
     }
 
     if ((layerEnable & 0x0200)) {
-        gfxDrawTextScreen(BG1CNT, BG1HOFS, BG1VOFS, line1);
+        gfxDrawTextScreen(&lcd_bg[1], palette, line1);
     }
 
     if ((layerEnable & 0x0400)) {
-        gfxDrawTextScreen(BG2CNT, BG2HOFS, BG2VOFS, line2);
+        gfxDrawTextScreen(&lcd_bg[2], palette, line2);
     }
 
     if ((layerEnable & 0x0800)) {
-        gfxDrawTextScreen(BG3CNT, BG3HOFS, BG3VOFS, line3);
+        gfxDrawTextScreen(&lcd_bg[3], palette, line3);
     }
 
-    gfxDrawSprites(lineOBJ);
-    gfxDrawOBJWin(lineOBJWin);
+    gfxDrawSprites();
+    gfxDrawOBJWin();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     uint8_t inWin0Mask = WININ & 0xFF;
     uint8_t inWin1Mask = WININ >> 8;
@@ -496,6 +460,6 @@ void mode0RenderLineAll()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
 }

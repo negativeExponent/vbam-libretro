@@ -7,7 +7,7 @@
 #include "gb.h"
 #include "gbGlobals.h"
 
-extern uint8_t* pix;
+extern pixFormat* pix;
 extern bool speedup;
 extern bool gbSgbResetFlag;
 
@@ -110,42 +110,11 @@ void gbSgbShutdown()
 
 void gbSgbFillScreen(uint16_t color)
 {
-    switch (systemColorDepth) {
-    case 16: {
-        for (int y = 0; y < 144; y++) {
-#ifdef __LIBRETRO__
-            int yLine = (y + gbBorderRowSkip) * gbBorderLineSkip + gbBorderColumnSkip;
-#else
-            int yLine = (y + gbBorderRowSkip + 1) * (gbBorderLineSkip + 2) + gbBorderColumnSkip;
-#endif
-            uint16_t* dest = (uint16_t*)pix + yLine;
-            for (int x = 0; x < 160; x++)
-                gbSgbDraw16Bit(dest++, color);
-        }
-    } break;
-    case 24: {
-        for (int y = 0; y < 144; y++) {
-            int yLine = (y + gbBorderRowSkip) * gbBorderLineSkip + gbBorderColumnSkip;
-            uint8_t* dest = (uint8_t*)pix + yLine * 3;
-            for (int x = 0; x < 160; x++) {
-                gbSgbDraw24Bit(dest, color);
-                dest += 3;
-            }
-        }
-    } break;
-    case 32: {
-        for (int y = 0; y < 144; y++) {
-#ifdef __LIBRETRO__
-            int yLine = (y + gbBorderRowSkip) * gbBorderLineSkip + gbBorderColumnSkip;
-#else
-            int yLine = (y + gbBorderRowSkip + 1) * (gbBorderLineSkip + 1) + gbBorderColumnSkip;
-#endif
-            uint32_t* dest = (uint32_t*)pix + yLine;
-            for (int x = 0; x < 160; x++) {
-                gbSgbDraw32Bit(dest++, color);
-            }
-        }
-    } break;
+    for (int y = 0; y < 144; y++) {
+        int yLine = (y + gbBorderRowSkip) * gbBorderLineSkip + gbBorderColumnSkip;
+        pixFormat* dest = pix + yLine;
+        for (int x = 0; x < 160; x++)
+            gbSgbDraw16Bit(dest++, color);
     }
 }
 
@@ -189,20 +158,10 @@ void gbSgbRenderScreenToBuffer()
 
 void gbSgbDrawBorderTile(int x, int y, int tile, int attr)
 {
-#ifdef __LIBRETRO__
-    uint16_t* dest = (uint16_t*)pix + (y * 256) + x;
-    uint32_t* dest32 = (uint32_t*)pix + (y * 256) + x;
-#else
-    uint16_t* dest = (uint16_t*)pix + ((y + 1) * (256 + 2)) + x;
-    uint32_t* dest32 = (uint32_t*)pix + ((y + 1) * (256 + 1)) + x;
-#endif
-    uint8_t* dest8 = (uint8_t*)pix + ((y * 256) + x) * 3;
-
+    pixFormat* dest = pix + (y * 256) + x;
     uint8_t* tileAddress = &gbSgbBorderChar[tile * 32];
     uint8_t* tileAddress2 = &gbSgbBorderChar[tile * 32 + 16];
-
     uint8_t l = 8;
-
     uint8_t palette = ((attr >> 2) & 7);
 
     if (palette < 4)
@@ -255,26 +214,7 @@ void gbSgbDrawBorderTile(int x, int y, int tile, int attr)
                 } else {
                     cc = gbPalette[0];
                 }
-
-                switch (systemColorDepth) {
-                case 16:
-#ifdef __LIBRETRO__
-                    gbSgbDraw16Bit(dest + yyy * 256 + xxx, cc);
-#else
-                    gbSgbDraw16Bit(dest + yyy * (256 + 2) + xxx, cc);
-#endif
-                    break;
-                case 24:
-                    gbSgbDraw24Bit(dest8 + (yyy * 256 + xxx) * 3, cc);
-                    break;
-                case 32:
-#ifdef __LIBRETRO__
-                    gbSgbDraw32Bit(dest32 + yyy * 256 + xxx, cc);
-#else
-                    gbSgbDraw32Bit(dest32 + yyy * (256 + 1) + xxx, cc);
-#endif
-                    break;
-                }
+                gbSgbDraw16Bit(dest + yyy * 256 + xxx, cc);
             }
 
             mask >>= 1;

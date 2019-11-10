@@ -2,46 +2,21 @@
 #include "GBAGfx.h"
 #include "Globals.h"
 
-void mode2RenderLine()
+void mode2RenderLine(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (DISPCNT & 0x80) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        gfxLastVCOUNT = VCOUNT;
-        return;
-    }
-
     if (layerEnable & 0x0400) {
-        int changed = gfxBG2Changed;
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen(BG2CNT, BG2X_L, BG2X_H, BG2Y_L, BG2Y_H,
-            BG2PA, BG2PB, BG2PC, BG2PD, gfxBG2X, gfxBG2Y,
-            changed, line2);
+        gfxDrawRotScreen(&lcd_bg[2], palette, line2);
     }
 
     if (layerEnable & 0x0800) {
-        int changed = gfxBG3Changed;
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen(BG3CNT, BG3X_L, BG3X_H, BG3Y_L, BG3Y_H,
-            BG3PA, BG3PB, BG3PC, BG3PD, gfxBG3X, gfxBG3Y,
-            changed, line3);
+        gfxDrawRotScreen(&lcd_bg[3], palette, line3);
     }
 
-    gfxDrawSprites(lineOBJ);
+    gfxDrawSprites();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -95,53 +70,25 @@ void mode2RenderLine()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
-    gfxBG2Changed = 0;
-    gfxBG3Changed = 0;
-    gfxLastVCOUNT = VCOUNT;
 }
 
-void mode2RenderLineNoWindow()
+void mode2RenderLineNoWindow(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (DISPCNT & 0x80) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        gfxLastVCOUNT = VCOUNT;
-        return;
-    }
-
     if (layerEnable & 0x0400) {
-        int changed = gfxBG2Changed;
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen(BG2CNT, BG2X_L, BG2X_H, BG2Y_L, BG2Y_H,
-            BG2PA, BG2PB, BG2PC, BG2PD, gfxBG2X, gfxBG2Y,
-            changed, line2);
+        gfxDrawRotScreen(&lcd_bg[2], palette, line2);
     }
 
     if (layerEnable & 0x0800) {
-        int changed = gfxBG3Changed;
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen(BG3CNT, BG3X_L, BG3X_H, BG3Y_L, BG3Y_H,
-            BG3PA, BG3PB, BG3PC, BG3PD, gfxBG3X, gfxBG3Y,
-            changed, line3);
+        gfxDrawRotScreen(&lcd_bg[3], palette, line3);
     }
 
-    gfxDrawSprites(lineOBJ);
+    gfxDrawSprites();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -240,24 +187,13 @@ void mode2RenderLineNoWindow()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
-    gfxBG2Changed = 0;
-    gfxBG3Changed = 0;
-    gfxLastVCOUNT = VCOUNT;
 }
 
-void mode2RenderLineAll()
+void mode2RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-
-    if (DISPCNT & 0x80) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        gfxLastVCOUNT = VCOUNT;
-        return;
-    }
 
     bool inWindow0 = false;
     bool inWindow1 = false;
@@ -282,34 +218,17 @@ void mode2RenderLineAll()
     }
 
     if (layerEnable & 0x0400) {
-        int changed = gfxBG2Changed;
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen(BG2CNT, BG2X_L, BG2X_H, BG2Y_L, BG2Y_H,
-            BG2PA, BG2PB, BG2PC, BG2PD, gfxBG2X, gfxBG2Y,
-            changed, line2);
+        gfxDrawRotScreen(&lcd_bg[2], palette, line2);
     }
 
     if (layerEnable & 0x0800) {
-        int changed = gfxBG3Changed;
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen(BG3CNT, BG3X_L, BG3X_H, BG3Y_L, BG3Y_H,
-            BG3PA, BG3PB, BG3PC, BG3PD, gfxBG3X, gfxBG3Y,
-            changed, line3);
+        gfxDrawRotScreen(&lcd_bg[3], palette, line3);
     }
 
-    gfxDrawSprites(lineOBJ);
-    gfxDrawOBJWin(lineOBJWin);
+    gfxDrawSprites();
+    gfxDrawOBJWin();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     uint8_t inWin0Mask = WININ & 0xFF;
     uint8_t inWin1Mask = WININ >> 8;
@@ -429,9 +348,6 @@ void mode2RenderLineAll()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
-    gfxBG2Changed = 0;
-    gfxBG3Changed = 0;
-    gfxLastVCOUNT = VCOUNT;
 }

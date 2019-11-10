@@ -24,7 +24,6 @@
 
 // Because Configmanager was introduced, this has to be done.
 int  rtcEnabled          = 0;
-int  cpuDisableSfx       = 0;
 int  skipBios            = 0;
 int  saveType            = 0;
 int  cpuSaveType         = 0;

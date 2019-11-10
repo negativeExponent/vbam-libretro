@@ -114,7 +114,6 @@ uint32_t dma2Dest = 0;
 uint32_t dma3Source = 0;
 uint32_t dma3Dest = 0;
 void (*cpuSaveGameFunc)(uint32_t, uint8_t) = flashSaveDecide;
-void (*renderLine)() = mode0RenderLine;
 bool fxOn = false;
 bool windowOn = false;
 int frameCount = 0;
@@ -136,13 +135,6 @@ const int TIMER_TICKS[4] = {
     10
 };
 
-const uint32_t objTilesAddress[3] = { 0x010000, 0x014000, 0x014000 };
-const uint8_t gamepakRamWaitState[4] = { 4, 3, 2, 8 };
-const uint8_t gamepakWaitState[4] = { 4, 3, 2, 8 };
-const uint8_t gamepakWaitState0[2] = { 2, 1 };
-const uint8_t gamepakWaitState1[2] = { 4, 1 };
-const uint8_t gamepakWaitState2[2] = { 8, 1 };
-
 uint8_t memoryWait[16] = { 0, 0, 2, 0, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 0 };
 uint8_t memoryWait32[16] = { 0, 0, 5, 0, 0, 1, 1, 0, 7, 7, 9, 9, 13, 13, 4, 0 };
 uint8_t memoryWaitSeq[16] = { 0, 0, 2, 0, 0, 0, 0, 0, 2, 2, 4, 4, 8, 8, 4, 0 };
@@ -156,6 +148,8 @@ uint8_t memoryWaitSeq32[16] = { 0, 0, 5, 0, 0, 1, 1, 0, 5, 5, 9, 9, 17, 17, 4, 0
 //  {0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 uint8_t biosProtected[4];
+
+static lcd_renderer_t renderer;
 
 #ifdef WORDS_BIGENDIAN
 bool cpuBiosSwapped = false;
@@ -513,38 +507,6 @@ inline int CPUUpdateTicks()
     return cpuLoopTicks;
 }
 
-void CPUUpdateWindow0()
-{
-    int x00 = WIN0H >> 8;
-    int x01 = WIN0H & 255;
-
-    if (x00 <= x01) {
-        for (int i = 0; i < 240; i++) {
-            gfxInWin0[i] = (i >= x00 && i < x01);
-        }
-    } else {
-        for (int i = 0; i < 240; i++) {
-            gfxInWin0[i] = (i >= x00 || i < x01);
-        }
-    }
-}
-
-void CPUUpdateWindow1()
-{
-    int x00 = WIN1H >> 8;
-    int x01 = WIN1H & 255;
-
-    if (x00 <= x01) {
-        for (int i = 0; i < 240; i++) {
-            gfxInWin1[i] = (i >= x00 && i < x01);
-        }
-    } else {
-        for (int i = 0; i < 240; i++) {
-            gfxInWin1[i] = (i >= x00 || i < x01);
-        }
-    }
-}
-
 extern uint32_t line0[240];
 extern uint32_t line1[240];
 extern uint32_t line2[240];
@@ -574,9 +536,7 @@ void CPUUpdateRenderBuffers(bool force)
     }
 }
 
-#ifdef __LIBRETRO__
 #include <stddef.h>
-
 unsigned int CPUWriteState(uint8_t* data, unsigned size)
 {
     uint8_t* orig = data;
@@ -667,8 +627,9 @@ bool CPUReadState(const uint8_t* data, unsigned size)
     CLEAR_ARRAY(line3);
     // End of CPU Update Render Buffers set to true
 
-    CPUUpdateWindow0();
-    CPUUpdateWindow1();
+    LCDUpdateWindow0();
+    LCDUpdateWindow1();
+    LCDLoadStateBGParams();
 
     SetSaveType(saveType);
 
@@ -683,252 +644,6 @@ bool CPUReadState(const uint8_t* data, unsigned size)
 
     return true;
 }
-
-#else // !__LIBRETRO__
-
-static bool CPUWriteState(gzFile gzFile)
-{
-    utilWriteInt(gzFile, SAVE_GAME_VERSION);
-
-    utilGzWrite(gzFile, &rom[0xa0], 16);
-
-    utilWriteInt(gzFile, useBios);
-
-    utilGzWrite(gzFile, &reg[0], sizeof(reg));
-
-    utilWriteData(gzFile, saveGameStruct);
-
-    // new to version 0.7.1
-    utilWriteInt(gzFile, stopState);
-    // new to version 0.8
-    utilWriteInt(gzFile, IRQTicks);
-
-    utilGzWrite(gzFile, internalRAM, SIZE_IRAM);
-    utilGzWrite(gzFile, paletteRAM, SIZE_PRAM);
-    utilGzWrite(gzFile, workRAM, SIZE_WRAM);
-    utilGzWrite(gzFile, vram, SIZE_VRAM);
-    utilGzWrite(gzFile, oam, SIZE_OAM);
-    utilGzWrite(gzFile, pix, SIZE_PIX);
-    utilGzWrite(gzFile, ioMem, SIZE_IOMEM);
-
-    eepromSaveGame(gzFile);
-    flashSaveGame(gzFile);
-    soundSaveGame(gzFile);
-
-    cheatsSaveGame(gzFile);
-
-    // version 1.5
-    rtcSaveGame(gzFile);
-
-    return true;
-}
-
-bool CPUWriteState(const char* file)
-{
-    gzFile gzFile = utilGzOpen(file, "wb");
-
-    if (gzFile == NULL) {
-        systemMessage(MSG_ERROR_CREATING_FILE, N_("Error creating file %s"), file);
-        return false;
-    }
-
-    bool res = CPUWriteState(gzFile);
-
-    utilGzClose(gzFile);
-
-    return res;
-}
-
-bool CPUWriteMemState(char* memory, int available, long& reserved)
-{
-    gzFile gzFile = utilMemGzOpen(memory, available, "w");
-
-    if (gzFile == NULL) {
-        return false;
-    }
-
-    bool res = CPUWriteState(gzFile);
-
-    reserved = utilGzMemTell(gzFile) + 8;
-
-    if (reserved >= (available))
-        res = false;
-
-    utilGzClose(gzFile);
-
-    return res;
-}
-
-static bool CPUReadState(gzFile gzFile)
-{
-    int version = utilReadInt(gzFile);
-
-    if (version > SAVE_GAME_VERSION || version < SAVE_GAME_VERSION_1) {
-        systemMessage(MSG_UNSUPPORTED_VBA_SGM,
-            N_("Unsupported VisualBoyAdvance save game version %d"),
-            version);
-        return false;
-    }
-
-    uint8_t romname[17];
-
-    utilGzRead(gzFile, romname, 16);
-
-    if (memcmp(&rom[0xa0], romname, 16) != 0) {
-        romname[16] = 0;
-        for (int i = 0; i < 16; i++)
-            if (romname[i] < 32)
-                romname[i] = 32;
-        systemMessage(MSG_CANNOT_LOAD_SGM, N_("Cannot load save game for %s"), romname);
-        return false;
-    }
-
-    bool ub = utilReadInt(gzFile) ? true : false;
-
-    if (ub != useBios) {
-        if (useBios)
-            systemMessage(MSG_SAVE_GAME_NOT_USING_BIOS,
-                N_("Save game is not using the BIOS files"));
-        else
-            systemMessage(MSG_SAVE_GAME_USING_BIOS,
-                N_("Save game is using the BIOS file"));
-        return false;
-    }
-
-    utilGzRead(gzFile, &reg[0], sizeof(reg));
-
-    utilReadData(gzFile, saveGameStruct);
-
-    if (version < SAVE_GAME_VERSION_3)
-        stopState = false;
-    else
-        stopState = utilReadInt(gzFile) ? true : false;
-
-    if (version < SAVE_GAME_VERSION_4) {
-        IRQTicks = 0;
-        intState = false;
-    } else {
-        IRQTicks = utilReadInt(gzFile);
-        if (IRQTicks > 0)
-            intState = true;
-        else {
-            intState = false;
-            IRQTicks = 0;
-        }
-    }
-
-    utilGzRead(gzFile, internalRAM, SIZE_IRAM);
-    utilGzRead(gzFile, paletteRAM, SIZE_PRAM);
-    utilGzRead(gzFile, workRAM, SIZE_WRAM);
-    utilGzRead(gzFile, vram, SIZE_VRAM);
-    utilGzRead(gzFile, oam, SIZE_OAM);
-    if (version < SAVE_GAME_VERSION_6)
-        utilGzRead(gzFile, pix, 4 * 240 * 160);
-    else
-        utilGzRead(gzFile, pix, SIZE_PIX);
-    utilGzRead(gzFile, ioMem, SIZE_IOMEM);
-
-    if (skipSaveGameBattery) {
-        // skip eeprom data
-        eepromReadGameSkip(gzFile, version);
-        // skip flash data
-        flashReadGameSkip(gzFile, version);
-    } else {
-        eepromReadGame(gzFile, version);
-        flashReadGame(gzFile, version);
-    }
-    soundReadGame(gzFile, version);
-
-    if (version > SAVE_GAME_VERSION_1) {
-        if (skipSaveGameCheats) {
-            // skip cheats list data
-            cheatsReadGameSkip(gzFile, version);
-        } else {
-            cheatsReadGame(gzFile, version);
-        }
-    }
-    if (version > SAVE_GAME_VERSION_6) {
-        rtcReadGame(gzFile);
-    }
-
-    if (version <= SAVE_GAME_VERSION_7) {
-        uint32_t temp;
-#define SWAP(a, b, c)      \
-    temp = (a);            \
-    (a) = (b) << 16 | (c); \
-    (b) = (temp) >> 16;    \
-    (c) = (temp)&0xFFFF;
-
-        SWAP(dma0Source, DM0SAD_H, DM0SAD_L);
-        SWAP(dma0Dest, DM0DAD_H, DM0DAD_L);
-        SWAP(dma1Source, DM1SAD_H, DM1SAD_L);
-        SWAP(dma1Dest, DM1DAD_H, DM1DAD_L);
-        SWAP(dma2Source, DM2SAD_H, DM2SAD_L);
-        SWAP(dma2Dest, DM2DAD_H, DM2DAD_L);
-        SWAP(dma3Source, DM3SAD_H, DM3SAD_L);
-        SWAP(dma3Dest, DM3DAD_H, DM3DAD_L);
-    }
-
-    if (version <= SAVE_GAME_VERSION_8) {
-        timer0ClockReload = TIMER_TICKS[TM0CNT & 3];
-        timer1ClockReload = TIMER_TICKS[TM1CNT & 3];
-        timer2ClockReload = TIMER_TICKS[TM2CNT & 3];
-        timer3ClockReload = TIMER_TICKS[TM3CNT & 3];
-
-        timer0Ticks = ((0x10000 - TM0D) << timer0ClockReload) - timer0Ticks;
-        timer1Ticks = ((0x10000 - TM1D) << timer1ClockReload) - timer1Ticks;
-        timer2Ticks = ((0x10000 - TM2D) << timer2ClockReload) - timer2Ticks;
-        timer3Ticks = ((0x10000 - TM3D) << timer3ClockReload) - timer3Ticks;
-        interp_rate();
-    }
-
-    // set pointers!
-    layerEnable = layerSettings & DISPCNT;
-
-    CPUUpdateRender();
-    CPUUpdateRenderBuffers(true);
-    CPUUpdateWindow0();
-    CPUUpdateWindow1();
-
-    SetSaveType(saveType);
-
-    systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
-    if (armState) {
-        ARM_PREFETCH;
-    } else {
-        THUMB_PREFETCH;
-    }
-
-    CPUUpdateRegister(0x204, CPUReadHalfWordQuick(0x4000204));
-
-    return true;
-}
-
-bool CPUReadMemState(char* memory, int available)
-{
-    gzFile gzFile = utilMemGzOpen(memory, available, "r");
-
-    bool res = CPUReadState(gzFile);
-
-    utilGzClose(gzFile);
-
-    return res;
-}
-
-bool CPUReadState(const char* file)
-{
-    gzFile gzFile = utilGzOpen(file, "rb");
-
-    if (gzFile == NULL)
-        return false;
-
-    bool res = CPUReadState(gzFile);
-
-    utilGzClose(gzFile);
-
-    return res;
-}
-#endif
 
 bool CPUExportEepromFile(const char* fileName)
 {
@@ -1260,12 +975,12 @@ bool CPUReadBatteryFile(const char* fileName)
 
 bool CPUWritePNGFile(const char* fileName)
 {
-    return utilWritePNGFile(fileName, 240, 160, pix);
+    return false;
 }
 
 bool CPUWriteBMPFile(const char* fileName)
 {
-    return utilWriteBMPFile(fileName, 240, 160, pix);
+    return false;
 }
 
 bool CPUIsZipFile(const char* file)
@@ -1353,50 +1068,7 @@ void CPUCleanUp()
     }
 #endif
 
-    if (rom != NULL) {
-        free(rom);
-        rom = NULL;
-    }
-
-    if (vram != NULL) {
-        free(vram);
-        vram = NULL;
-    }
-
-    if (paletteRAM != NULL) {
-        free(paletteRAM);
-        paletteRAM = NULL;
-    }
-
-    if (internalRAM != NULL) {
-        free(internalRAM);
-        internalRAM = NULL;
-    }
-
-    if (workRAM != NULL) {
-        free(workRAM);
-        workRAM = NULL;
-    }
-
-    if (bios != NULL) {
-        free(bios);
-        bios = NULL;
-    }
-
-    if (pix != NULL) {
-        free(pix);
-        pix = NULL;
-    }
-
-    if (oam != NULL) {
-        free(oam);
-        oam = NULL;
-    }
-
-    if (ioMem != NULL) {
-        free(ioMem);
-        ioMem = NULL;
-    }
+    GBAMemoryCleanup();
 
 #ifndef NO_DEBUGGER
     elfCleanUp();
@@ -1446,26 +1118,12 @@ void SetMapMasks()
 
 int CPULoadRom(const char* szFile)
 {
-    romSize = SIZE_ROM;
-    if (rom != NULL) {
+    if (!GBAMemoryInit()) {
         CPUCleanUp();
-    }
-
-    systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
-
-    rom = (uint8_t*)malloc(SIZE_ROM);
-    if (rom == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "ROM");
-        return 0;
-    }
-    workRAM = (uint8_t*)calloc(1, SIZE_WRAM);
-    if (workRAM == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "WRAM");
         return 0;
     }
 
+    romSize = SIZE_ROM;
     uint8_t* whereToLoad = cpuIsMultiBoot ? workRAM : rom;
 
 #ifndef NO_DEBUGGER
@@ -1511,87 +1169,17 @@ int CPULoadRom(const char* szFile)
         temp++;
     }
 
-    bios = (uint8_t*)calloc(1, SIZE_BIOS);
-    if (bios == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "BIOS");
-        CPUCleanUp();
-        return 0;
-    }
-    internalRAM = (uint8_t*)calloc(1, SIZE_IRAM);
-    if (internalRAM == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "IRAM");
-        CPUCleanUp();
-        return 0;
-    }
-    paletteRAM = (uint8_t*)calloc(1, SIZE_PRAM);
-    if (paletteRAM == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "PRAM");
-        CPUCleanUp();
-        return 0;
-    }
-    vram = (uint8_t*)calloc(1, SIZE_VRAM);
-    if (vram == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "VRAM");
-        CPUCleanUp();
-        return 0;
-    }
-    oam = (uint8_t*)calloc(1, SIZE_OAM);
-    if (oam == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "OAM");
-        CPUCleanUp();
-        return 0;
-    }
-
-    pix = (uint8_t*)calloc(1, 4 * 241 * 162);
-    if (pix == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "PIX");
-        CPUCleanUp();
-        return 0;
-    }
-    ioMem = (uint8_t*)calloc(1, SIZE_IOMEM);
-    if (ioMem == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "IO");
-        CPUCleanUp();
-        return 0;
-    }
-
-    flashInit();
-    eepromInit();
-
-    CPUUpdateRenderBuffers(true);
-
     return romSize;
 }
 
 int CPULoadRomData(const char* data, int size)
 {
-    romSize = SIZE_ROM;
-    if (rom != NULL) {
+    if (!GBAMemoryInit()) {
         CPUCleanUp();
-    }
-
-    systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
-
-    rom = (uint8_t*)malloc(SIZE_ROM);
-    if (rom == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "ROM");
-        return 0;
-    }
-    workRAM = (uint8_t*)calloc(1, SIZE_WRAM);
-    if (workRAM == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "WRAM");
         return 0;
     }
 
+    romSize = SIZE_ROM;
     uint8_t* whereToLoad = cpuIsMultiBoot ? workRAM : rom;
 
     romSize = size % 2 == 0 ? size : size + 1;
@@ -1603,62 +1191,6 @@ int CPULoadRomData(const char* data, int size)
         WRITE16LE(temp, (i >> 1) & 0xFFFF);
         temp++;
     }
-
-    bios = (uint8_t*)calloc(1, SIZE_BIOS);
-    if (bios == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "BIOS");
-        CPUCleanUp();
-        return 0;
-    }
-    internalRAM = (uint8_t*)calloc(1, SIZE_IRAM);
-    if (internalRAM == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "IRAM");
-        CPUCleanUp();
-        return 0;
-    }
-    paletteRAM = (uint8_t*)calloc(1, SIZE_PRAM);
-    if (paletteRAM == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "PRAM");
-        CPUCleanUp();
-        return 0;
-    }
-    vram = (uint8_t*)calloc(1, SIZE_VRAM);
-    if (vram == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "VRAM");
-        CPUCleanUp();
-        return 0;
-    }
-    oam = (uint8_t*)calloc(1, SIZE_OAM);
-    if (oam == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "OAM");
-        CPUCleanUp();
-        return 0;
-    }
-
-    pix = (uint8_t*)calloc(1, 4 * 240 * 160);
-    if (pix == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "PIX");
-        CPUCleanUp();
-        return 0;
-    }
-    ioMem = (uint8_t*)calloc(1, SIZE_IOMEM);
-    if (ioMem == NULL) {
-        systemMessage(MSG_OUT_OF_MEMORY, N_("Failed to allocate memory for %s"),
-            "IO");
-        CPUCleanUp();
-        return 0;
-    }
-
-    flashInit();
-    eepromInit();
-
-    CPUUpdateRenderBuffers(true);
 
     return romSize;
 }
@@ -1707,56 +1239,18 @@ void SetSaveDotCodeFile(const char* szFile)
 
 void CPUUpdateRender()
 {
-    switch (DISPCNT & 7) {
-    case 0:
-        if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
-            renderLine = mode0RenderLine;
-        else if (fxOn && !windowOn && !(layerEnable & 0x8000))
-            renderLine = mode0RenderLineNoWindow;
-        else
-            renderLine = mode0RenderLineAll;
-        break;
-    case 1:
-        if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
-            renderLine = mode1RenderLine;
-        else if (fxOn && !windowOn && !(layerEnable & 0x8000))
-            renderLine = mode1RenderLineNoWindow;
-        else
-            renderLine = mode1RenderLineAll;
-        break;
-    case 2:
-        if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
-            renderLine = mode2RenderLine;
-        else if (fxOn && !windowOn && !(layerEnable & 0x8000))
-            renderLine = mode2RenderLineNoWindow;
-        else
-            renderLine = mode2RenderLineAll;
-        break;
-    case 3:
-        if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
-            renderLine = mode3RenderLine;
-        else if (fxOn && !windowOn && !(layerEnable & 0x8000))
-            renderLine = mode3RenderLineNoWindow;
-        else
-            renderLine = mode3RenderLineAll;
-        break;
-    case 4:
-        if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
-            renderLine = mode4RenderLine;
-        else if (fxOn && !windowOn && !(layerEnable & 0x8000))
-            renderLine = mode4RenderLineNoWindow;
-        else
-            renderLine = mode4RenderLineAll;
-        break;
-    case 5:
-        if ((!fxOn && !windowOn && !(layerEnable & 0x8000)) || cpuDisableSfx)
-            renderLine = mode5RenderLine;
-        else if (fxOn && !windowOn && !(layerEnable & 0x8000))
-            renderLine = mode5RenderLineNoWindow;
-        else
-            renderLine = mode5RenderLineAll;
-    default:
-        break;
+    int mode = (DISPCNT & 7);
+    if (mode > 5)
+        return;
+    renderer.mode = mode;
+    if (!windowOn && !(layerEnable & 0x8000)) {
+        if (!fxOn) {
+            renderer.type = 0;
+        } else {
+            renderer.type = 1;
+        }
+    } else {
+       renderer.type = 2;
     }
 }
 
@@ -2247,7 +1741,7 @@ void CPUSoftwareInterrupt(int comment)
     }
 }
 
-void CPUCompareVCOUNT()
+void CPUCompareVCOUNT(void)
 {
     if (VCOUNT == (DISPSTAT >> 8)) {
         DISPSTAT |= 4;
@@ -2596,547 +2090,6 @@ void CPUCheckDMA(int reason, int dmamask)
     }
 }
 
-void CPUUpdateRegister(uint32_t address, uint16_t value)
-{
-    switch (address) {
-    case 0x00: { // we need to place the following code in { } because we declare & initialize variables in a case statement
-        if ((value & 7) > 5) {
-            // display modes above 0-5 are prohibited
-            DISPCNT = (value & 7);
-        }
-        bool change = (0 != ((DISPCNT ^ value) & 0x80));
-        bool changeBG = (0 != ((DISPCNT ^ value) & 0x0F00));
-        uint16_t changeBGon = ((~DISPCNT) & value) & 0x0F00; // these layers are being activated
-
-        DISPCNT = (value & 0xFFF7); // bit 3 can only be accessed by the BIOS to enable GBC mode
-        UPDATE_REG(0x00, DISPCNT);
-
-        if (changeBGon) {
-            layerEnableDelay = 4;
-            layerEnable = layerSettings & value & (~changeBGon);
-        } else {
-            layerEnable = layerSettings & value;
-            // CPUUpdateTicks();
-        }
-
-        windowOn = (layerEnable & 0x6000) ? true : false;
-        if (change && !((value & 0x80))) {
-            if (!(DISPSTAT & 1)) {
-                //lcdTicks = 1008;
-                //      VCOUNT = 0;
-                //      UPDATE_REG(0x06, VCOUNT);
-                DISPSTAT &= 0xFFFC;
-                UPDATE_REG(0x04, DISPSTAT);
-                CPUCompareVCOUNT();
-            }
-            //        (*renderLine)();
-        }
-        CPUUpdateRender();
-        // we only care about changes in BG0-BG3
-        if (changeBG) {
-            CPUUpdateRenderBuffers(false);
-        }
-        break;
-    }
-    case 0x04:
-        DISPSTAT = (value & 0xFF38) | (DISPSTAT & 7);
-        UPDATE_REG(0x04, DISPSTAT);
-        break;
-    case 0x06:
-        // not writable
-        break;
-    case 0x08:
-        BG0CNT = (value & 0xDFCF);
-        UPDATE_REG(0x08, BG0CNT);
-        break;
-    case 0x0A:
-        BG1CNT = (value & 0xDFCF);
-        UPDATE_REG(0x0A, BG1CNT);
-        break;
-    case 0x0C:
-        BG2CNT = (value & 0xFFCF);
-        UPDATE_REG(0x0C, BG2CNT);
-        break;
-    case 0x0E:
-        BG3CNT = (value & 0xFFCF);
-        UPDATE_REG(0x0E, BG3CNT);
-        break;
-    case 0x10:
-        BG0HOFS = value & 511;
-        UPDATE_REG(0x10, BG0HOFS);
-        break;
-    case 0x12:
-        BG0VOFS = value & 511;
-        UPDATE_REG(0x12, BG0VOFS);
-        break;
-    case 0x14:
-        BG1HOFS = value & 511;
-        UPDATE_REG(0x14, BG1HOFS);
-        break;
-    case 0x16:
-        BG1VOFS = value & 511;
-        UPDATE_REG(0x16, BG1VOFS);
-        break;
-    case 0x18:
-        BG2HOFS = value & 511;
-        UPDATE_REG(0x18, BG2HOFS);
-        break;
-    case 0x1A:
-        BG2VOFS = value & 511;
-        UPDATE_REG(0x1A, BG2VOFS);
-        break;
-    case 0x1C:
-        BG3HOFS = value & 511;
-        UPDATE_REG(0x1C, BG3HOFS);
-        break;
-    case 0x1E:
-        BG3VOFS = value & 511;
-        UPDATE_REG(0x1E, BG3VOFS);
-        break;
-    case 0x20:
-        BG2PA = value;
-        UPDATE_REG(0x20, BG2PA);
-        break;
-    case 0x22:
-        BG2PB = value;
-        UPDATE_REG(0x22, BG2PB);
-        break;
-    case 0x24:
-        BG2PC = value;
-        UPDATE_REG(0x24, BG2PC);
-        break;
-    case 0x26:
-        BG2PD = value;
-        UPDATE_REG(0x26, BG2PD);
-        break;
-    case 0x28:
-        BG2X_L = value;
-        UPDATE_REG(0x28, BG2X_L);
-        gfxBG2Changed |= 1;
-        break;
-    case 0x2A:
-        BG2X_H = (value & 0xFFF);
-        UPDATE_REG(0x2A, BG2X_H);
-        gfxBG2Changed |= 1;
-        break;
-    case 0x2C:
-        BG2Y_L = value;
-        UPDATE_REG(0x2C, BG2Y_L);
-        gfxBG2Changed |= 2;
-        break;
-    case 0x2E:
-        BG2Y_H = value & 0xFFF;
-        UPDATE_REG(0x2E, BG2Y_H);
-        gfxBG2Changed |= 2;
-        break;
-    case 0x30:
-        BG3PA = value;
-        UPDATE_REG(0x30, BG3PA);
-        break;
-    case 0x32:
-        BG3PB = value;
-        UPDATE_REG(0x32, BG3PB);
-        break;
-    case 0x34:
-        BG3PC = value;
-        UPDATE_REG(0x34, BG3PC);
-        break;
-    case 0x36:
-        BG3PD = value;
-        UPDATE_REG(0x36, BG3PD);
-        break;
-    case 0x38:
-        BG3X_L = value;
-        UPDATE_REG(0x38, BG3X_L);
-        gfxBG3Changed |= 1;
-        break;
-    case 0x3A:
-        BG3X_H = value & 0xFFF;
-        UPDATE_REG(0x3A, BG3X_H);
-        gfxBG3Changed |= 1;
-        break;
-    case 0x3C:
-        BG3Y_L = value;
-        UPDATE_REG(0x3C, BG3Y_L);
-        gfxBG3Changed |= 2;
-        break;
-    case 0x3E:
-        BG3Y_H = value & 0xFFF;
-        UPDATE_REG(0x3E, BG3Y_H);
-        gfxBG3Changed |= 2;
-        break;
-    case 0x40:
-        WIN0H = value;
-        UPDATE_REG(0x40, WIN0H);
-        CPUUpdateWindow0();
-        break;
-    case 0x42:
-        WIN1H = value;
-        UPDATE_REG(0x42, WIN1H);
-        CPUUpdateWindow1();
-        break;
-    case 0x44:
-        WIN0V = value;
-        UPDATE_REG(0x44, WIN0V);
-        break;
-    case 0x46:
-        WIN1V = value;
-        UPDATE_REG(0x46, WIN1V);
-        break;
-    case 0x48:
-        WININ = value & 0x3F3F;
-        UPDATE_REG(0x48, WININ);
-        break;
-    case 0x4A:
-        WINOUT = value & 0x3F3F;
-        UPDATE_REG(0x4A, WINOUT);
-        break;
-    case 0x4C:
-        MOSAIC = value;
-        UPDATE_REG(0x4C, MOSAIC);
-        break;
-    case 0x50:
-        BLDMOD = value & 0x3FFF;
-        UPDATE_REG(0x50, BLDMOD);
-        fxOn = ((BLDMOD >> 6) & 3) != 0;
-        CPUUpdateRender();
-        break;
-    case 0x52:
-        COLEV = value & 0x1F1F;
-        UPDATE_REG(0x52, COLEV);
-        break;
-    case 0x54:
-        COLY = value & 0x1F;
-        UPDATE_REG(0x54, COLY);
-        break;
-    case 0x60:
-    case 0x62:
-    case 0x64:
-    case 0x68:
-    case 0x6c:
-    case 0x70:
-    case 0x72:
-    case 0x74:
-    case 0x78:
-    case 0x7c:
-    case 0x80:
-    case 0x84:
-        soundEvent8(address & 0xFF, (uint8_t)(value & 0xFF));
-        soundEvent8((address & 0xFF) + 1, (uint8_t)(value >> 8));
-        break;
-    case 0x82:
-    case 0x88:
-    case 0xa0:
-    case 0xa2:
-    case 0xa4:
-    case 0xa6:
-    case 0x90:
-    case 0x92:
-    case 0x94:
-    case 0x96:
-    case 0x98:
-    case 0x9a:
-    case 0x9c:
-    case 0x9e:
-        soundEvent16(address & 0xFF, value);
-        break;
-    case 0xB0:
-        DM0SAD_L = value;
-        UPDATE_REG(0xB0, DM0SAD_L);
-        break;
-    case 0xB2:
-        DM0SAD_H = value & 0x07FF;
-        UPDATE_REG(0xB2, DM0SAD_H);
-        break;
-    case 0xB4:
-        DM0DAD_L = value;
-        UPDATE_REG(0xB4, DM0DAD_L);
-        break;
-    case 0xB6:
-        DM0DAD_H = value & 0x07FF;
-        UPDATE_REG(0xB6, DM0DAD_H);
-        break;
-    case 0xB8:
-        DM0CNT_L = value & 0x3FFF;
-        UPDATE_REG(0xB8, 0);
-        break;
-    case 0xBA: {
-        bool start = ((DM0CNT_H ^ value) & 0x8000) ? true : false;
-        value &= 0xF7E0;
-
-        DM0CNT_H = value;
-        UPDATE_REG(0xBA, DM0CNT_H);
-
-        if (start && (value & 0x8000)) {
-            dma0Source = DM0SAD_L | (DM0SAD_H << 16);
-            dma0Dest = DM0DAD_L | (DM0DAD_H << 16);
-            CPUCheckDMA(0, 1);
-        }
-    } break;
-    case 0xBC:
-        DM1SAD_L = value;
-        UPDATE_REG(0xBC, DM1SAD_L);
-        break;
-    case 0xBE:
-        DM1SAD_H = value & 0x0FFF;
-        UPDATE_REG(0xBE, DM1SAD_H);
-        break;
-    case 0xC0:
-        DM1DAD_L = value;
-        UPDATE_REG(0xC0, DM1DAD_L);
-        break;
-    case 0xC2:
-        DM1DAD_H = value & 0x07FF;
-        UPDATE_REG(0xC2, DM1DAD_H);
-        break;
-    case 0xC4:
-        DM1CNT_L = value & 0x3FFF;
-        UPDATE_REG(0xC4, 0);
-        break;
-    case 0xC6: {
-        bool start = ((DM1CNT_H ^ value) & 0x8000) ? true : false;
-        value &= 0xF7E0;
-
-        DM1CNT_H = value;
-        UPDATE_REG(0xC6, DM1CNT_H);
-
-        if (start && (value & 0x8000)) {
-            dma1Source = DM1SAD_L | (DM1SAD_H << 16);
-            dma1Dest = DM1DAD_L | (DM1DAD_H << 16);
-            CPUCheckDMA(0, 2);
-        }
-    } break;
-    case 0xC8:
-        DM2SAD_L = value;
-        UPDATE_REG(0xC8, DM2SAD_L);
-        break;
-    case 0xCA:
-        DM2SAD_H = value & 0x0FFF;
-        UPDATE_REG(0xCA, DM2SAD_H);
-        break;
-    case 0xCC:
-        DM2DAD_L = value;
-        UPDATE_REG(0xCC, DM2DAD_L);
-        break;
-    case 0xCE:
-        DM2DAD_H = value & 0x07FF;
-        UPDATE_REG(0xCE, DM2DAD_H);
-        break;
-    case 0xD0:
-        DM2CNT_L = value & 0x3FFF;
-        UPDATE_REG(0xD0, 0);
-        break;
-    case 0xD2: {
-        bool start = ((DM2CNT_H ^ value) & 0x8000) ? true : false;
-
-        value &= 0xF7E0;
-
-        DM2CNT_H = value;
-        UPDATE_REG(0xD2, DM2CNT_H);
-
-        if (start && (value & 0x8000)) {
-            dma2Source = DM2SAD_L | (DM2SAD_H << 16);
-            dma2Dest = DM2DAD_L | (DM2DAD_H << 16);
-
-            CPUCheckDMA(0, 4);
-        }
-    } break;
-    case 0xD4:
-        DM3SAD_L = value;
-        UPDATE_REG(0xD4, DM3SAD_L);
-        break;
-    case 0xD6:
-        DM3SAD_H = value & 0x0FFF;
-        UPDATE_REG(0xD6, DM3SAD_H);
-        break;
-    case 0xD8:
-        DM3DAD_L = value;
-        UPDATE_REG(0xD8, DM3DAD_L);
-        break;
-    case 0xDA:
-        DM3DAD_H = value & 0x0FFF;
-        UPDATE_REG(0xDA, DM3DAD_H);
-        break;
-    case 0xDC:
-        DM3CNT_L = value;
-        UPDATE_REG(0xDC, 0);
-        break;
-    case 0xDE: {
-        bool start = ((DM3CNT_H ^ value) & 0x8000) ? true : false;
-
-        value &= 0xFFE0;
-
-        DM3CNT_H = value;
-        UPDATE_REG(0xDE, DM3CNT_H);
-
-        if (start && (value & 0x8000)) {
-            dma3Source = DM3SAD_L | (DM3SAD_H << 16);
-            dma3Dest = DM3DAD_L | (DM3DAD_H << 16);
-            CPUCheckDMA(0, 8);
-        }
-    } break;
-    case 0x100:
-        timer0Reload = value;
-        interp_rate();
-        break;
-    case 0x102:
-        timer0Value = value;
-        timerOnOffDelay |= 1;
-        cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x104:
-        timer1Reload = value;
-        interp_rate();
-        break;
-    case 0x106:
-        timer1Value = value;
-        timerOnOffDelay |= 2;
-        cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x108:
-        timer2Reload = value;
-        break;
-    case 0x10A:
-        timer2Value = value;
-        timerOnOffDelay |= 4;
-        cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x10C:
-        timer3Reload = value;
-        break;
-    case 0x10E:
-        timer3Value = value;
-        timerOnOffDelay |= 8;
-        cpuNextEvent = cpuTotalTicks;
-        break;
-
-#ifndef NO_LINK
-    case COMM_SIOCNT:
-        StartLink(value);
-        break;
-
-    case COMM_SIODATA8:
-        UPDATE_REG(COMM_SIODATA8, value);
-        break;
-#endif
-
-    case 0x130:
-        P1 |= (value & 0x3FF);
-        UPDATE_REG(0x130, P1);
-        break;
-
-    case 0x132:
-        UPDATE_REG(0x132, value & 0xC3FF);
-        break;
-
-#ifndef NO_LINK
-    case COMM_RCNT:
-        StartGPLink(value);
-        break;
-
-    case COMM_JOYCNT: {
-        uint16_t cur = READ16LE(&ioMem[COMM_JOYCNT]);
-
-        if (value & JOYCNT_RESET)
-            cur &= ~JOYCNT_RESET;
-        if (value & JOYCNT_RECV_COMPLETE)
-            cur &= ~JOYCNT_RECV_COMPLETE;
-        if (value & JOYCNT_SEND_COMPLETE)
-            cur &= ~JOYCNT_SEND_COMPLETE;
-        if (value & JOYCNT_INT_ENABLE)
-            cur |= JOYCNT_INT_ENABLE;
-
-        UPDATE_REG(COMM_JOYCNT, cur);
-    } break;
-
-    case COMM_JOY_RECV_L:
-        UPDATE_REG(COMM_JOY_RECV_L, value);
-        break;
-    case COMM_JOY_RECV_H:
-        UPDATE_REG(COMM_JOY_RECV_H, value);
-        break;
-
-    case COMM_JOY_TRANS_L:
-        UPDATE_REG(COMM_JOY_TRANS_L, value);
-        UPDATE_REG(COMM_JOYSTAT, READ16LE(&ioMem[COMM_JOYSTAT]) | JOYSTAT_SEND);
-        break;
-    case COMM_JOY_TRANS_H:
-        UPDATE_REG(COMM_JOY_TRANS_H, value);
-        UPDATE_REG(COMM_JOYSTAT, READ16LE(&ioMem[COMM_JOYSTAT]) | JOYSTAT_SEND);
-        break;
-
-    case COMM_JOYSTAT:
-        UPDATE_REG(COMM_JOYSTAT, (READ16LE(&ioMem[COMM_JOYSTAT]) & 0x0a) | (value & ~0x0a));
-        break;
-#endif
-
-    case 0x200:
-        IE = value & 0x3FFF;
-        UPDATE_REG(0x200, IE);
-        if ((IME & 1) && (IF & IE) && armIrqEnable)
-            cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x202:
-        IF ^= (value & IF);
-        UPDATE_REG(0x202, IF);
-        break;
-    case 0x204: {
-        memoryWait[0x0e] = memoryWaitSeq[0x0e] = gamepakRamWaitState[value & 3];
-
-        if (!speedHack) {
-            memoryWait[0x08] = memoryWait[0x09] = gamepakWaitState[(value >> 2) & 3];
-            memoryWaitSeq[0x08] = memoryWaitSeq[0x09] = gamepakWaitState0[(value >> 4) & 1];
-
-            memoryWait[0x0a] = memoryWait[0x0b] = gamepakWaitState[(value >> 5) & 3];
-            memoryWaitSeq[0x0a] = memoryWaitSeq[0x0b] = gamepakWaitState1[(value >> 7) & 1];
-
-            memoryWait[0x0c] = memoryWait[0x0d] = gamepakWaitState[(value >> 8) & 3];
-            memoryWaitSeq[0x0c] = memoryWaitSeq[0x0d] = gamepakWaitState2[(value >> 10) & 1];
-        } else {
-            memoryWait[0x08] = memoryWait[0x09] = 3;
-            memoryWaitSeq[0x08] = memoryWaitSeq[0x09] = 1;
-
-            memoryWait[0x0a] = memoryWait[0x0b] = 3;
-            memoryWaitSeq[0x0a] = memoryWaitSeq[0x0b] = 1;
-
-            memoryWait[0x0c] = memoryWait[0x0d] = 3;
-            memoryWaitSeq[0x0c] = memoryWaitSeq[0x0d] = 1;
-        }
-
-        for (int i = 8; i < 15; i++) {
-            memoryWait32[i] = memoryWait[i] + memoryWaitSeq[i] + 1;
-            memoryWaitSeq32[i] = memoryWaitSeq[i] * 2 + 1;
-        }
-
-        if ((value & 0x4000) == 0x4000) {
-            busPrefetchEnable = true;
-            busPrefetch = false;
-            busPrefetchCount = 0;
-        } else {
-            busPrefetchEnable = false;
-            busPrefetch = false;
-            busPrefetchCount = 0;
-        }
-        UPDATE_REG(0x204, value & 0x7FFF);
-
-    } break;
-    case 0x208:
-        IME = value & 1;
-        UPDATE_REG(0x208, IME);
-        if ((IME & 1) && (IF & IE) && armIrqEnable)
-            cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x300:
-        if (value != 0)
-            value &= 0xFFFE;
-        UPDATE_REG(0x300, value);
-        break;
-    default:
-        UPDATE_REG(address & 0x3FE, value);
-        break;
-    }
-}
-
 void applyTimer()
 {
     if (timerOnOffDelay & 1) {
@@ -3441,6 +2394,12 @@ void CPUReset()
     IF = 0x0000;
     IME = 0x0000;
 
+    LCDResetBGParams();
+    renderer.mode = 0;
+    renderer.type = 0;
+    fxOn = false;
+    windowOn = false;
+
     armMode = 0x1F;
 
     if (cpuIsMultiBoot) {
@@ -3517,9 +2476,6 @@ void CPUReset()
     dma2Dest = 0;
     dma3Source = 0;
     dma3Dest = 0;
-    renderLine = mode0RenderLine;
-    fxOn = false;
-    windowOn = false;
     frameCount = 0;
     layerEnable = DISPCNT & layerSettings;
 
@@ -3547,8 +2503,8 @@ void CPUReset()
 
     soundReset();
 
-    CPUUpdateWindow0();
-    CPUUpdateWindow1();
+    LCDUpdateWindow0();
+    LCDUpdateWindow1();
 
     // make sure registers are correctly initialized if not using BIOS
     if (!useBios) {
@@ -3692,7 +2648,7 @@ void CPULoop(int ticks)
             clockTicks = cpuNextEvent;
             cpuTotalTicks = 0;
 
-        updateLoop:
+updateLoop:
 
             if (IRQTicks) {
                 IRQTicks -= clockTicks;
@@ -3721,95 +2677,29 @@ void CPULoop(int ticks)
                             UPDATE_REG(0x202, IF);
                         }
                     }
-
                     if (VCOUNT > 227) { //Reaching last line
                         DISPSTAT &= 0xFFFC;
                         UPDATE_REG(0x04, DISPSTAT);
                         VCOUNT = 0;
                         UPDATE_REG(0x06, VCOUNT);
                         CPUCompareVCOUNT();
+                        LCDUpdateBGRef(2);
+                        LCDUpdateBGRef(3);
                     }
+
                 } else {
-                    int framesToSkip = systemFrameSkip;
-
-#ifndef __LIBRETRO__
-                    static bool speedup_throttle_set = false;
-                    static uint32_t last_throttle;
-
-                    if ((joy >> 10) & 1) {
-                        if (speedup_throttle != 0) {
-                            if (!speedup_throttle_set && throttle != speedup_throttle) {
-                                last_throttle = throttle;
-                                throttle = speedup_throttle;
-                                soundSetThrottle(speedup_throttle);
-                                speedup_throttle_set = true;
-                            }
-                        }
-                        else {
-                            if (speedup_frame_skip)
-                                framesToSkip = speedup_frame_skip;
-
-                            speedup_throttle_set = false;
-                        }
-                    }
-                    else if (speedup_throttle_set) {
-                        throttle = last_throttle;
-                        soundSetThrottle(last_throttle);
-
-                        speedup_throttle_set = false;
-                    }
-#else
-                    if ((joy >> 10) & 1)
-                        framesToSkip = 9;
-#endif
-
                     if (DISPSTAT & 2) {
                         // if in H-Blank, leave it and move to drawing mode
                         VCOUNT++;
                         UPDATE_REG(0x06, VCOUNT);
-
                         lcdTicks += 1008;
                         DISPSTAT &= 0xFFFD;
                         if (VCOUNT == 160) {
-                            count++;
-                            systemFrame();
-
-                            if ((count % 10) == 0) {
-                                system10Frames(60);
-                            }
-                            if (count == 60) {
-                                uint32_t time = systemGetClock();
-                                if (time != lastTime) {
-                                    uint32_t t = 100000 / (time - lastTime);
-                                    systemShowSpeed(t);
-                                } else
-                                    systemShowSpeed(0);
-                                lastTime = time;
-                                count = 0;
-                            }
-
                             uint32_t ext = (joy >> 10);
                             // If no (m) code is enabled, apply the cheats at each LCDline
-                            if ((cheatsEnabled) && (mastercode == 0))
+                            if ((cheatsEnabled) && (mastercode == 0)) {
                                 remainingTicks += cheatsCheckKeys(P1 ^ 0x3FF, ext);
-
-                            speedup = false;
-
-#ifndef __LIBRETRO__
-                            if (ext & 1 && speedup_throttle == 0)
-#else
-                            if (ext & 1)
-#endif
-                                speedup = true;
-
-                            capture = (ext & 2) ? true : false;
-
-                            if (capture && !capturePrevious) {
-                                captureNumber++;
-                                systemScreenCapture(captureNumber);
                             }
-                            capturePrevious = capture;
-
                             DISPSTAT |= 1;
                             DISPSTAT &= 0xFFFD;
                             UPDATE_REG(0x04, DISPSTAT);
@@ -3818,125 +2708,54 @@ void CPULoop(int ticks)
                                 UPDATE_REG(0x202, IF);
                             }
                             CPUCheckDMA(1, 0x0f);
-
-                            if (frameCount >= framesToSkip) {
-                                systemDrawScreen();
-                                frameCount = 0;
-                            } else
-                                frameCount++;
-                            if (systemPauseOnFrame())
-                                ticks = 0;
-
+                            systemFrame();
+                            systemDrawScreen(pix);
                             hasFrames = true;
                         }
-
                         UPDATE_REG(0x04, DISPSTAT);
                         CPUCompareVCOUNT();
 
                     } else {
-                        if (frameCount >= framesToSkip) {
-                            (*renderLine)();
-                            switch (systemColorDepth) {
-                            case 16: {
-#ifdef __LIBRETRO__
-                                uint16_t* dest = (uint16_t*)pix + 240 * VCOUNT;
-#else
-                                uint16_t* dest = (uint16_t*)pix + 242 * (VCOUNT + 1);
-#endif
-                                for (int x = 0; x < 240;) {
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap16[lineMix[x++] & 0xFFFF];
+                        // scanline drawing mode
+                        //if (frameCount >= framesToSkip)
+                        {
+                            pixFormat* dest = pix + 240 * VCOUNT;
+                            if ((DISPCNT & 0x80) == 0) {
+                                // Draw scanline pix to screen buffer
+                                int mode = (renderer.mode << 4) | renderer.type;
+                                switch (mode) {
+                                case 0x00: mode0RenderLine(dest); break;
+                                case 0x01: mode0RenderLineNoWindow(dest); break;
+                                case 0x02: mode0RenderLineAll(dest); break;
+                                case 0x10: mode1RenderLine(dest); break;
+                                case 0x11: mode1RenderLineNoWindow(dest); break;
+                                case 0x12: mode1RenderLineAll(dest); break;
+                                case 0x20: mode2RenderLine(dest);  break;
+                                case 0x21: mode2RenderLineNoWindow(dest);  break;
+                                case 0x22: mode2RenderLineAll(dest); break;
+                                case 0x30: mode3RenderLine(dest); break;
+                                case 0x31: mode3RenderLineNoWindow(dest); break;
+                                case 0x32: mode3RenderLineAll(dest); break;
+                                case 0x40: mode4RenderLine(dest); break;
+                                case 0x41: mode4RenderLineNoWindow(dest); break;
+                                case 0x42: mode4RenderLineAll(dest); break;
+                                case 0x50: mode5RenderLine(dest); break;
+                                case 0x51: mode5RenderLineNoWindow(dest); break;
+                                case 0x52: mode5RenderLineAll(dest); break;
                                 }
-// for filters that read past the screen
-#ifndef __LIBRETRO__
-                                *dest++ = 0;
-#endif
-                            } break;
-                            case 24: {
-                                uint8_t* dest = (uint8_t*)pix + 240 * VCOUNT * 3;
-                                for (int x = 0; x < 240;) {
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                    *((uint32_t*)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    dest += 3;
-                                }
-                            } break;
-                            case 32: {
-#ifdef __LIBRETRO__
-                                uint32_t* dest = (uint32_t*)pix + 240 * VCOUNT;
-#else
-                                uint32_t* dest = (uint32_t*)pix + 241 * (VCOUNT + 1);
-#endif
-                                for (int x = 0; x < 240;) {
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                    *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-                                }
-                            } break;
+                            } else {
+                                // draw white screen when during Forced Blank
+                                forceBlankLine(dest);
+                            }
+                        }
+                        if (renderer.mode) {
+                            if (layerEnable & 0x0400) {
+                                lcd_bg[2].x_pos += lcd_bg[2].dmx;
+                                lcd_bg[2].y_pos += lcd_bg[2].dmy;
+                            }
+                            if (layerEnable & 0x0800) {
+                                lcd_bg[3].x_pos += lcd_bg[3].dmx;
+                                lcd_bg[3].y_pos += lcd_bg[3].dmy;
                             }
                         }
                         // entering H-Blank
@@ -3957,113 +2776,145 @@ void CPULoop(int ticks)
             // mute sound
 
             soundTicks -= clockTicks;
-            if (soundTicks <= 0) {
-                psoundTickfn();
-                soundTicks += SOUND_CLOCK_TICKS;
+            if (soundTicks <= 0)
+            {
+               psoundTickfn();
+               soundTicks += SOUND_CLOCK_TICKS;
             }
 
-            if (!stopState) {
-                if (timer0On) {
-                    timer0Ticks -= clockTicks;
-                    if (timer0Ticks <= 0) {
-                        timer0Ticks += (0x10000 - timer0Reload) << timer0ClockReload;
-                        timerOverflow |= 1;
-                        soundTimerOverflow(0);
-                        if (TM0CNT & 0x40) {
-                            IF |= 0x08;
-                            UPDATE_REG(0x202, IF);
-                        }
-                    }
-                    TM0D = 0xFFFF - (timer0Ticks >> timer0ClockReload);
-                    UPDATE_REG(0x100, TM0D);
-                }
+            if (!stopState)
+            {
+               if (timer0On)
+               {
+                  timer0Ticks -= clockTicks;
+                  if (timer0Ticks <= 0)
+                  {
+                     timer0Ticks += (0x10000 - timer0Reload) << timer0ClockReload;
+                     timerOverflow |= 1;
+                     soundTimerOverflow(0);
+                     if (TM0CNT & 0x40)
+                     {
+                        IF |= 0x08;
+                        UPDATE_REG(0x202, IF);
+                     }
+                  }
+                  TM0D = 0xFFFF - (timer0Ticks >> timer0ClockReload);
+                  UPDATE_REG(0x100, TM0D);
+               }
 
-                if (timer1On) {
-                    if (TM1CNT & 4) {
-                        if (timerOverflow & 1) {
-                            TM1D++;
-                            if (TM1D == 0) {
-                                TM1D += timer1Reload;
-                                timerOverflow |= 2;
-                                soundTimerOverflow(1);
-                                if (TM1CNT & 0x40) {
-                                    IF |= 0x10;
-                                    UPDATE_REG(0x202, IF);
-                                }
-                            }
-                            UPDATE_REG(0x104, TM1D);
+               if (timer1On)
+               {
+                  if (TM1CNT & 4)
+                  {
+                     if (timerOverflow & 1)
+                     {
+                        TM1D++;
+                        if (TM1D == 0)
+                        {
+                           TM1D += timer1Reload;
+                           timerOverflow |= 2;
+                           soundTimerOverflow(1);
+                           if (TM1CNT & 0x40)
+                           {
+                              IF |= 0x10;
+                              UPDATE_REG(0x202, IF);
+                           }
                         }
-                    } else {
-                        timer1Ticks -= clockTicks;
-                        if (timer1Ticks <= 0) {
-                            timer1Ticks += (0x10000 - timer1Reload) << timer1ClockReload;
-                            timerOverflow |= 2;
-                            soundTimerOverflow(1);
-                            if (TM1CNT & 0x40) {
-                                IF |= 0x10;
-                                UPDATE_REG(0x202, IF);
-                            }
-                        }
-                        TM1D = 0xFFFF - (timer1Ticks >> timer1ClockReload);
                         UPDATE_REG(0x104, TM1D);
-                    }
-                }
+                     }
+                  }
+                  else
+                  {
+                     timer1Ticks -= clockTicks;
+                     if (timer1Ticks <= 0)
+                     {
+                        timer1Ticks += (0x10000 - timer1Reload) << timer1ClockReload;
+                        timerOverflow |= 2;
+                        soundTimerOverflow(1);
+                        if (TM1CNT & 0x40)
+                        {
+                           IF |= 0x10;
+                           UPDATE_REG(0x202, IF);
+                        }
+                     }
+                     TM1D = 0xFFFF - (timer1Ticks >> timer1ClockReload);
+                     UPDATE_REG(0x104, TM1D);
+                  }
+               }
 
-                if (timer2On) {
-                    if (TM2CNT & 4) {
-                        if (timerOverflow & 2) {
-                            TM2D++;
-                            if (TM2D == 0) {
-                                TM2D += timer2Reload;
-                                timerOverflow |= 4;
-                                if (TM2CNT & 0x40) {
-                                    IF |= 0x20;
-                                    UPDATE_REG(0x202, IF);
-                                }
-                            }
-                            UPDATE_REG(0x108, TM2D);
+               if (timer2On)
+               {
+                  if (TM2CNT & 4)
+                  {
+                     if (timerOverflow & 2)
+                     {
+                        TM2D++;
+                        if (TM2D == 0)
+                        {
+                           TM2D += timer2Reload;
+                           timerOverflow |= 4;
+                           if (TM2CNT & 0x40)
+                           {
+                              IF |= 0x20;
+                              UPDATE_REG(0x202, IF);
+                           }
                         }
-                    } else {
-                        timer2Ticks -= clockTicks;
-                        if (timer2Ticks <= 0) {
-                            timer2Ticks += (0x10000 - timer2Reload) << timer2ClockReload;
-                            timerOverflow |= 4;
-                            if (TM2CNT & 0x40) {
-                                IF |= 0x20;
-                                UPDATE_REG(0x202, IF);
-                            }
-                        }
-                        TM2D = 0xFFFF - (timer2Ticks >> timer2ClockReload);
                         UPDATE_REG(0x108, TM2D);
-                    }
-                }
+                     }
+                  }
+                  else
+                  {
+                     timer2Ticks -= clockTicks;
+                     if (timer2Ticks <= 0)
+                     {
+                        timer2Ticks += (0x10000 - timer2Reload) << timer2ClockReload;
+                        timerOverflow |= 4;
+                        if (TM2CNT & 0x40)
+                        {
+                           IF |= 0x20;
+                           UPDATE_REG(0x202, IF);
+                        }
+                     }
+                     TM2D = 0xFFFF - (timer2Ticks >> timer2ClockReload);
+                     UPDATE_REG(0x108, TM2D);
+                  }
+               }
 
-                if (timer3On) {
-                    if (TM3CNT & 4) {
-                        if (timerOverflow & 4) {
-                            TM3D++;
-                            if (TM3D == 0) {
-                                TM3D += timer3Reload;
-                                if (TM3CNT & 0x40) {
-                                    IF |= 0x40;
-                                    UPDATE_REG(0x202, IF);
-                                }
-                            }
-                            UPDATE_REG(0x10C, TM3D);
+               if (timer3On)
+               {
+                  if (TM3CNT & 4)
+                  {
+                     if (timerOverflow & 4)
+                     {
+                        TM3D++;
+                        if (TM3D == 0)
+                        {
+                           TM3D += timer3Reload;
+                           if (TM3CNT & 0x40)
+                           {
+                              IF |= 0x40;
+                              UPDATE_REG(0x202, IF);
+                           }
                         }
-                    } else {
-                        timer3Ticks -= clockTicks;
-                        if (timer3Ticks <= 0) {
-                            timer3Ticks += (0x10000 - timer3Reload) << timer3ClockReload;
-                            if (TM3CNT & 0x40) {
-                                IF |= 0x40;
-                                UPDATE_REG(0x202, IF);
-                            }
-                        }
-                        TM3D = 0xFFFF - (timer3Ticks >> timer3ClockReload);
                         UPDATE_REG(0x10C, TM3D);
-                    }
-                }
+                     }
+                  }
+                  else
+                  {
+                     timer3Ticks -= clockTicks;
+                     if (timer3Ticks <= 0)
+                     {
+                        timer3Ticks += (0x10000 - timer3Reload) << timer3ClockReload;
+                        if (TM3CNT & 0x40)
+                        {
+                           IF |= 0x40;
+                           UPDATE_REG(0x202, IF);
+                        }
+                     }
+                     TM3D = 0xFFFF - (timer3Ticks >> timer3ClockReload);
+                     UPDATE_REG(0x10C, TM3D);
+                  }
+               }
             }
 
             timerOverflow = 0;

@@ -41,9 +41,9 @@ extern uint8_t* internalRAM;
 extern uint8_t* workRAM;
 extern uint8_t* paletteRAM;
 extern uint8_t* vram;
-extern uint8_t* pix;
 extern uint8_t* oam;
 extern uint8_t* ioMem;
+extern pixFormat* pix;
 
 extern uint16_t DISPCNT;
 extern uint16_t DISPSTAT;

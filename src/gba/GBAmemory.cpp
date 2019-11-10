@@ -1,4 +1,602 @@
+#include <string.h>
 #include "GBAinline.h"
+#include "GBAGfx.h"
+
+extern int layerEnableDelay;
+extern bool windowOn;
+extern bool fxOn;
+extern uint8_t timerOnOffDelay;
+extern uint16_t timer0Value;
+extern bool timer0On;
+extern int timer0Ticks;
+extern int timer0Reload;
+extern int timer0ClockReload;
+extern uint16_t timer1Value;
+extern bool timer1On;
+extern int timer1Ticks;
+extern int timer1Reload;
+extern int timer1ClockReload;
+extern uint16_t timer2Value;
+extern bool timer2On;
+extern int timer2Ticks;
+extern int timer2Reload;
+extern int timer2ClockReload;
+extern uint16_t timer3Value;
+extern bool timer3On;
+extern int timer3Ticks;
+extern int timer3Reload;
+extern int timer3ClockReload;
+extern uint32_t dma0Source;
+extern uint32_t dma0Dest;
+extern uint32_t dma1Source;
+extern uint32_t dma1Dest;
+extern uint32_t dma2Source;
+extern uint32_t dma2Dest;
+extern uint32_t dma3Source;
+extern uint32_t dma3Dest;
+
+static const uint32_t objTilesAddress[3] = { 0x010000, 0x014000, 0x014000 };
+static const uint8_t gamepakRamWaitState[4] = { 4, 3, 2, 8 };
+static const uint8_t gamepakWaitState[4] = { 4, 3, 2, 8 };
+static const uint8_t gamepakWaitState0[2] = { 2, 1 };
+static const uint8_t gamepakWaitState1[2] = { 4, 1 };
+static const uint8_t gamepakWaitState2[2] = { 8, 1 };
+
+void CPUUpdateRegister(uint32_t address, uint16_t value)
+{
+   /*if (address >= 0x008 && address < 0x056)
+   {
+      log("LCD REG: A:%04x V:%04x VideoMode = %02x VCOUNT = %3d\n",
+         address, value, DISPCNT & 7, VCOUNT);
+   }*/
+
+    switch (address) {
+    case 0x00: {
+        if ((value & 7) > 5) {
+            // display modes above 0-5 are prohibited
+            DISPCNT = (value & 7);
+        }
+        bool change = (0 != ((DISPCNT ^ value) & 0x80));
+        bool changeBG = (0 != ((DISPCNT ^ value) & 0x0F00));
+        uint16_t changeBGon = ((~DISPCNT) & value) & 0x0F00; // these layers are being activated
+
+        DISPCNT = (value & 0xFFF7); // bit 3 can only be accessed by the BIOS to enable GBC mode
+        UPDATE_REG(0x00, DISPCNT);
+
+        if (changeBGon) {
+            layerEnableDelay = 4;
+            layerEnable = layerSettings & value & (~changeBGon);
+        } else {
+            layerEnable = layerSettings & value;
+            // CPUUpdateTicks();
+        }
+
+        windowOn = (layerEnable & 0x6000) ? true : false;
+        if (change && !((value & 0x80))) {
+            if (!(DISPSTAT & 1)) {
+                //lcdTicks = 1008;
+                //      VCOUNT = 0;
+                //      UPDATE_REG(0x06, VCOUNT);
+                DISPSTAT &= 0xFFFC;
+                UPDATE_REG(0x04, DISPSTAT);
+                CPUCompareVCOUNT();
+            }
+            //        (*renderLine)();
+        }
+        CPUUpdateRender();
+        // we only care about changes in BG0-BG3
+        if (changeBG) {
+            CPUUpdateRenderBuffers(false);
+        }
+        break;
+    }
+    case 0x04:
+        DISPSTAT = (value & 0xFF38) | (DISPSTAT & 7);
+        UPDATE_REG(0x04, DISPSTAT);
+        break;
+    case 0x06:
+        // not writable
+        break;
+    case 0x08:
+        BG0CNT = (value & 0xDFCF);
+        UPDATE_REG(0x08, BG0CNT);
+        LCDUpdateBGCNT(&lcd_bg[0], BG0CNT);
+        break;
+    case 0x0A:
+        BG1CNT = (value & 0xDFCF);
+        UPDATE_REG(0x0A, BG1CNT);
+        LCDUpdateBGCNT(&lcd_bg[1], BG1CNT);
+        break;
+    case 0x0C:
+        BG2CNT = (value & 0xFFCF);
+        UPDATE_REG(0x0C, BG2CNT);
+        LCDUpdateBGCNT(&lcd_bg[2], BG2CNT);
+        break;
+    case 0x0E:
+        BG3CNT = (value & 0xFFCF);
+        UPDATE_REG(0x0E, BG3CNT);
+        LCDUpdateBGCNT(&lcd_bg[3], BG3CNT);
+        break;
+    case 0x10:
+        BG0HOFS = value & 511;
+        UPDATE_REG(0x10, BG0HOFS);
+        LCDUpdateBGHOFS(&lcd_bg[0], BG0HOFS);
+        break;
+    case 0x12:
+        BG0VOFS = value & 511;
+        UPDATE_REG(0x12, BG0VOFS);
+        LCDUpdateBGVOFS(&lcd_bg[0], BG0VOFS);
+        break;
+    case 0x14:
+        BG1HOFS = value & 511;
+        UPDATE_REG(0x14, BG1HOFS);
+        LCDUpdateBGHOFS(&lcd_bg[1], BG1HOFS);
+        break;
+    case 0x16:
+        BG1VOFS = value & 511;
+        UPDATE_REG(0x16, BG1VOFS);
+        LCDUpdateBGVOFS(&lcd_bg[1], BG1VOFS);
+        break;
+    case 0x18:
+        BG2HOFS = value & 511;
+        UPDATE_REG(0x18, BG2HOFS);
+        LCDUpdateBGHOFS(&lcd_bg[2], BG2HOFS);
+        break;
+    case 0x1A:
+        BG2VOFS = value & 511;
+        UPDATE_REG(0x1A, BG2VOFS);
+        LCDUpdateBGVOFS(&lcd_bg[2], BG2VOFS);
+        break;
+    case 0x1C:
+        BG3HOFS = value & 511;
+        UPDATE_REG(0x1C, BG3HOFS);
+        LCDUpdateBGHOFS(&lcd_bg[3], BG3HOFS);
+        break;
+    case 0x1E:
+        BG3VOFS = value & 511;
+        UPDATE_REG(0x1E, BG3VOFS);
+        LCDUpdateBGVOFS(&lcd_bg[3], BG3VOFS);
+        break;
+    case 0x20:
+        BG2PA = value;
+        UPDATE_REG(0x20, BG2PA);
+        LCDUpdateBGPA(&lcd_bg[2], BG2PA);
+        break;
+    case 0x22:
+        BG2PB = value;
+        UPDATE_REG(0x22, BG2PB);
+        LCDUpdateBGPB(&lcd_bg[2], BG2PB);
+        break;
+    case 0x24:
+        BG2PC = value;
+        UPDATE_REG(0x24, BG2PC);
+        LCDUpdateBGPC(&lcd_bg[2], BG2PC);
+        break;
+    case 0x26:
+        BG2PD = value;
+        UPDATE_REG(0x26, BG2PD);
+        LCDUpdateBGPD(&lcd_bg[2], BG2PD);
+        break;
+    case 0x28:
+        BG2X_L = value;
+        UPDATE_REG(0x28, BG2X_L);
+        LCDUpdateBGX_L(&lcd_bg[2], BG2X_L);
+        break;
+    case 0x2A:
+        BG2X_H = (value & 0xFFF);
+        UPDATE_REG(0x2A, BG2X_H);
+        LCDUpdateBGX_H(&lcd_bg[2], BG2X_H);
+        break;
+    case 0x2C:
+        BG2Y_L = value;
+        UPDATE_REG(0x2C, BG2Y_L);
+        LCDUpdateBGY_L(&lcd_bg[2], BG2Y_L);
+        break;
+    case 0x2E:
+        BG2Y_H = value & 0xFFF;
+        UPDATE_REG(0x2E, BG2Y_H);
+        LCDUpdateBGY_H(&lcd_bg[2], BG2Y_H);
+        break;
+    case 0x30:
+        BG3PA = value;
+        UPDATE_REG(0x30, BG3PA);
+        LCDUpdateBGPA(&lcd_bg[3], BG3PA);
+        break;
+    case 0x32:
+        BG3PB = value;
+        UPDATE_REG(0x32, BG3PB);
+        LCDUpdateBGPB(&lcd_bg[3], BG3PB);
+        break;
+    case 0x34:
+        BG3PC = value;
+        UPDATE_REG(0x34, BG3PC);
+        LCDUpdateBGPC(&lcd_bg[3], BG3PC);
+        break;
+    case 0x36:
+        BG3PD = value;
+        UPDATE_REG(0x36, BG3PD);
+        LCDUpdateBGPD(&lcd_bg[3], BG3PD);
+        break;
+    case 0x38:
+        BG3X_L = value;
+        UPDATE_REG(0x38, BG3X_L);
+        LCDUpdateBGX_L(&lcd_bg[3],BG3X_L);
+        break;
+    case 0x3A:
+        BG3X_H = value & 0xFFF;
+        UPDATE_REG(0x3A, BG3X_H);
+        LCDUpdateBGX_H(&lcd_bg[3],BG3X_H);
+        break;
+    case 0x3C:
+        BG3Y_L = value;
+        UPDATE_REG(0x3C, BG3Y_L);
+        LCDUpdateBGY_L(&lcd_bg[3],BG3Y_L);
+        break;
+    case 0x3E:
+        BG3Y_H = value & 0xFFF;
+        UPDATE_REG(0x3E, BG3Y_H);
+        LCDUpdateBGY_H(&lcd_bg[3],BG3Y_H);
+        break;
+    case 0x40:
+        WIN0H = value;
+        UPDATE_REG(0x40, WIN0H);
+        LCDUpdateWindow0();
+        break;
+    case 0x42:
+        WIN1H = value;
+        UPDATE_REG(0x42, WIN1H);
+        LCDUpdateWindow1();
+        break;
+    case 0x44:
+        WIN0V = value;
+        UPDATE_REG(0x44, WIN0V);
+        break;
+    case 0x46:
+        WIN1V = value;
+        UPDATE_REG(0x46, WIN1V);
+        break;
+    case 0x48:
+        WININ = value & 0x3F3F;
+        UPDATE_REG(0x48, WININ);
+        break;
+    case 0x4A:
+        WINOUT = value & 0x3F3F;
+        UPDATE_REG(0x4A, WINOUT);
+        break;
+    case 0x4C:
+        MOSAIC = value;
+        UPDATE_REG(0x4C, MOSAIC);
+        break;
+    case 0x50:
+        BLDMOD = value & 0x3FFF;
+        UPDATE_REG(0x50, BLDMOD);
+        fxOn = ((BLDMOD >> 6) & 3) != 0;
+        CPUUpdateRender();
+        break;
+    case 0x52:
+        COLEV = value & 0x1F1F;
+        UPDATE_REG(0x52, COLEV);
+        break;
+    case 0x54:
+        COLY = value & 0x1F;
+        UPDATE_REG(0x54, COLY);
+        break;
+    case 0x60:
+    case 0x62:
+    case 0x64:
+    case 0x68:
+    case 0x6c:
+    case 0x70:
+    case 0x72:
+    case 0x74:
+    case 0x78:
+    case 0x7c:
+    case 0x80:
+    case 0x84:
+        soundEvent8(address & 0xFF, (uint8_t)(value & 0xFF));
+        soundEvent8((address & 0xFF) + 1, (uint8_t)(value >> 8));
+        break;
+    case 0x82:
+    case 0x88:
+    case 0xa0:
+    case 0xa2:
+    case 0xa4:
+    case 0xa6:
+    case 0x90:
+    case 0x92:
+    case 0x94:
+    case 0x96:
+    case 0x98:
+    case 0x9a:
+    case 0x9c:
+    case 0x9e:
+        soundEvent16(address & 0xFF, value);
+        break;
+    case 0xB0:
+        DM0SAD_L = value;
+        UPDATE_REG(0xB0, DM0SAD_L);
+        break;
+    case 0xB2:
+        DM0SAD_H = value & 0x07FF;
+        UPDATE_REG(0xB2, DM0SAD_H);
+        break;
+    case 0xB4:
+        DM0DAD_L = value;
+        UPDATE_REG(0xB4, DM0DAD_L);
+        break;
+    case 0xB6:
+        DM0DAD_H = value & 0x07FF;
+        UPDATE_REG(0xB6, DM0DAD_H);
+        break;
+    case 0xB8:
+        DM0CNT_L = value & 0x3FFF;
+        UPDATE_REG(0xB8, 0);
+        break;
+    case 0xBA: {
+        bool start = ((DM0CNT_H ^ value) & 0x8000) ? true : false;
+        value &= 0xF7E0;
+
+        DM0CNT_H = value;
+        UPDATE_REG(0xBA, DM0CNT_H);
+
+        if (start && (value & 0x8000)) {
+            dma0Source = DM0SAD_L | (DM0SAD_H << 16);
+            dma0Dest = DM0DAD_L | (DM0DAD_H << 16);
+            CPUCheckDMA(0, 1);
+        }
+    } break;
+    case 0xBC:
+        DM1SAD_L = value;
+        UPDATE_REG(0xBC, DM1SAD_L);
+        break;
+    case 0xBE:
+        DM1SAD_H = value & 0x0FFF;
+        UPDATE_REG(0xBE, DM1SAD_H);
+        break;
+    case 0xC0:
+        DM1DAD_L = value;
+        UPDATE_REG(0xC0, DM1DAD_L);
+        break;
+    case 0xC2:
+        DM1DAD_H = value & 0x07FF;
+        UPDATE_REG(0xC2, DM1DAD_H);
+        break;
+    case 0xC4:
+        DM1CNT_L = value & 0x3FFF;
+        UPDATE_REG(0xC4, 0);
+        break;
+    case 0xC6: {
+        bool start = ((DM1CNT_H ^ value) & 0x8000) ? true : false;
+        value &= 0xF7E0;
+
+        DM1CNT_H = value;
+        UPDATE_REG(0xC6, DM1CNT_H);
+
+        if (start && (value & 0x8000)) {
+            dma1Source = DM1SAD_L | (DM1SAD_H << 16);
+            dma1Dest = DM1DAD_L | (DM1DAD_H << 16);
+            CPUCheckDMA(0, 2);
+        }
+    } break;
+    case 0xC8:
+        DM2SAD_L = value;
+        UPDATE_REG(0xC8, DM2SAD_L);
+        break;
+    case 0xCA:
+        DM2SAD_H = value & 0x0FFF;
+        UPDATE_REG(0xCA, DM2SAD_H);
+        break;
+    case 0xCC:
+        DM2DAD_L = value;
+        UPDATE_REG(0xCC, DM2DAD_L);
+        break;
+    case 0xCE:
+        DM2DAD_H = value & 0x07FF;
+        UPDATE_REG(0xCE, DM2DAD_H);
+        break;
+    case 0xD0:
+        DM2CNT_L = value & 0x3FFF;
+        UPDATE_REG(0xD0, 0);
+        break;
+    case 0xD2: {
+        bool start = ((DM2CNT_H ^ value) & 0x8000) ? true : false;
+
+        value &= 0xF7E0;
+
+        DM2CNT_H = value;
+        UPDATE_REG(0xD2, DM2CNT_H);
+
+        if (start && (value & 0x8000)) {
+            dma2Source = DM2SAD_L | (DM2SAD_H << 16);
+            dma2Dest = DM2DAD_L | (DM2DAD_H << 16);
+
+            CPUCheckDMA(0, 4);
+        }
+    } break;
+    case 0xD4:
+        DM3SAD_L = value;
+        UPDATE_REG(0xD4, DM3SAD_L);
+        break;
+    case 0xD6:
+        DM3SAD_H = value & 0x0FFF;
+        UPDATE_REG(0xD6, DM3SAD_H);
+        break;
+    case 0xD8:
+        DM3DAD_L = value;
+        UPDATE_REG(0xD8, DM3DAD_L);
+        break;
+    case 0xDA:
+        DM3DAD_H = value & 0x0FFF;
+        UPDATE_REG(0xDA, DM3DAD_H);
+        break;
+    case 0xDC:
+        DM3CNT_L = value;
+        UPDATE_REG(0xDC, 0);
+        break;
+    case 0xDE: {
+        bool start = ((DM3CNT_H ^ value) & 0x8000) ? true : false;
+
+        value &= 0xFFE0;
+
+        DM3CNT_H = value;
+        UPDATE_REG(0xDE, DM3CNT_H);
+
+        if (start && (value & 0x8000)) {
+            dma3Source = DM3SAD_L | (DM3SAD_H << 16);
+            dma3Dest = DM3DAD_L | (DM3DAD_H << 16);
+            CPUCheckDMA(0, 8);
+        }
+    } break;
+    case 0x100:
+        timer0Reload = value;
+        interp_rate();
+        break;
+    case 0x102:
+        timer0Value = value;
+        timerOnOffDelay |= 1;
+        cpuNextEvent = cpuTotalTicks;
+        break;
+    case 0x104:
+        timer1Reload = value;
+        interp_rate();
+        break;
+    case 0x106:
+        timer1Value = value;
+        timerOnOffDelay |= 2;
+        cpuNextEvent = cpuTotalTicks;
+        break;
+    case 0x108:
+        timer2Reload = value;
+        break;
+    case 0x10A:
+        timer2Value = value;
+        timerOnOffDelay |= 4;
+        cpuNextEvent = cpuTotalTicks;
+        break;
+    case 0x10C:
+        timer3Reload = value;
+        break;
+    case 0x10E:
+        timer3Value = value;
+        timerOnOffDelay |= 8;
+        cpuNextEvent = cpuTotalTicks;
+        break;
+
+#ifndef NO_LINK
+    case COMM_SIOCNT:
+        StartLink(value);
+        break;
+
+    case COMM_SIODATA8:
+        UPDATE_REG(COMM_SIODATA8, value);
+        break;
+#endif
+
+    case 0x130:
+        P1 |= (value & 0x3FF);
+        UPDATE_REG(0x130, P1);
+        break;
+
+    case 0x132:
+        UPDATE_REG(0x132, value & 0xC3FF);
+        break;
+
+#ifndef NO_LINK
+    case COMM_RCNT:
+        StartGPLink(value);
+        break;
+
+    case COMM_JOYCNT: {
+        uint16_t cur = READ16LE(&ioMem[COMM_JOYCNT]);
+
+        if (value & JOYCNT_RESET)
+            cur &= ~JOYCNT_RESET;
+        if (value & JOYCNT_RECV_COMPLETE)
+            cur &= ~JOYCNT_RECV_COMPLETE;
+        if (value & JOYCNT_SEND_COMPLETE)
+            cur &= ~JOYCNT_SEND_COMPLETE;
+        if (value & JOYCNT_INT_ENABLE)
+            cur |= JOYCNT_INT_ENABLE;
+
+        UPDATE_REG(COMM_JOYCNT, cur);
+    } break;
+
+    case COMM_JOY_RECV_L:
+        UPDATE_REG(COMM_JOY_RECV_L, value);
+        break;
+    case COMM_JOY_RECV_H:
+        UPDATE_REG(COMM_JOY_RECV_H, value);
+        break;
+
+    case COMM_JOY_TRANS_L:
+        UPDATE_REG(COMM_JOY_TRANS_L, value);
+        UPDATE_REG(COMM_JOYSTAT, READ16LE(&ioMem[COMM_JOYSTAT]) | JOYSTAT_SEND);
+        break;
+    case COMM_JOY_TRANS_H:
+        UPDATE_REG(COMM_JOY_TRANS_H, value);
+        UPDATE_REG(COMM_JOYSTAT, READ16LE(&ioMem[COMM_JOYSTAT]) | JOYSTAT_SEND);
+        break;
+
+    case COMM_JOYSTAT:
+        UPDATE_REG(COMM_JOYSTAT, (READ16LE(&ioMem[COMM_JOYSTAT]) & 0x0a) | (value & ~0x0a));
+        break;
+#endif
+
+    case 0x200:
+        IE = value & 0x3FFF;
+        UPDATE_REG(0x200, IE);
+        if ((IME & 1) && (IF & IE) && armIrqEnable)
+            cpuNextEvent = cpuTotalTicks;
+        break;
+    case 0x202:
+        IF ^= (value & IF);
+        UPDATE_REG(0x202, IF);
+        break;
+    case 0x204: {
+        memoryWait[0x0e] = memoryWaitSeq[0x0e] = gamepakRamWaitState[value & 3];
+
+        memoryWait[0x08] = memoryWait[0x09] = gamepakWaitState[(value >> 2) & 3];
+        memoryWaitSeq[0x08] = memoryWaitSeq[0x09] = gamepakWaitState0[(value >> 4) & 1];
+
+        memoryWait[0x0a] = memoryWait[0x0b] = gamepakWaitState[(value >> 5) & 3];
+        memoryWaitSeq[0x0a] = memoryWaitSeq[0x0b] = gamepakWaitState1[(value >> 7) & 1];
+
+        memoryWait[0x0c] = memoryWait[0x0d] = gamepakWaitState[(value >> 8) & 3];
+        memoryWaitSeq[0x0c] = memoryWaitSeq[0x0d] = gamepakWaitState2[(value >> 10) & 1];
+
+        for (int i = 8; i < 15; i++) {
+            memoryWait32[i] = memoryWait[i] + memoryWaitSeq[i] + 1;
+            memoryWaitSeq32[i] = memoryWaitSeq[i] * 2 + 1;
+        }
+
+        if ((value & 0x4000) == 0x4000) {
+            busPrefetchEnable = true;
+            busPrefetch = false;
+            busPrefetchCount = 0;
+        } else {
+            busPrefetchEnable = false;
+            busPrefetch = false;
+            busPrefetchCount = 0;
+        }
+        UPDATE_REG(0x204, value & 0x7FFF);
+
+    } break;
+    case 0x208:
+        IME = value & 1;
+        UPDATE_REG(0x208, IME);
+        if ((IME & 1) && (IF & IE) && armIrqEnable)
+            cpuNextEvent = cpuTotalTicks;
+        break;
+    case 0x300:
+        if (value != 0)
+            value &= 0xFFFE;
+        UPDATE_REG(0x300, value);
+        break;
+    default:
+        UPDATE_REG(address & 0x3FE, value);
+        break;
+    }
+}
 
 static inline uint32_t ROR(uint32_t value, uint32_t shift)
 {
@@ -612,4 +1210,100 @@ void CPUWriteByte(uint32_t address, uint8_t value)
          }
          break;
    }
+}
+
+void GBAMemoryCleanup(void)
+{
+   if (rom != NULL)
+   {
+      free(rom);
+      rom = NULL;
+   }
+
+   if (vram != NULL)
+   {
+      free(vram);
+      vram = NULL;
+   }
+
+   if (paletteRAM != NULL)
+   {
+      free(paletteRAM);
+      paletteRAM = NULL;
+   }
+
+   if (internalRAM != NULL)
+   {
+      free(internalRAM);
+      internalRAM = NULL;
+   }
+
+   if (workRAM != NULL)
+   {
+      free(workRAM);
+      workRAM = NULL;
+   }
+
+   if (bios != NULL)
+   {
+      free(bios);
+      bios = NULL;
+   }
+
+   if (pix != NULL)
+   {
+      free(pix);
+      pix = NULL;
+   }
+
+   if (oam != NULL)
+   {
+      free(oam);
+      oam = NULL;
+   }
+
+   if (ioMem != NULL)
+   {
+      free(ioMem);
+      ioMem = NULL;
+   }
+}
+
+bool GBAMemoryInit(void)
+{
+   if (rom != NULL)
+      CPUCleanUp();
+
+   bios = (uint8_t*)malloc(SIZE_BIOS);
+   workRAM = (uint8_t*)malloc(SIZE_WRAM);
+   internalRAM = (uint8_t*)malloc(SIZE_IRAM);
+   ioMem = (uint8_t*)malloc(SIZE_IOMEM);
+   paletteRAM = (uint8_t*)malloc(SIZE_PRAM);
+   vram = (uint8_t*)malloc(SIZE_VRAM);
+   oam = (uint8_t*)malloc(SIZE_OAM);
+   rom = (uint8_t*)malloc(SIZE_ROM);
+   pix = (pixFormat*)malloc(gbaWidth * gbaHeight * 4);
+
+   memset(bios, 1, SIZE_BIOS);
+   memset(workRAM, 1, SIZE_WRAM);
+   memset(internalRAM, 1, SIZE_IRAM);
+   memset(ioMem, 1, SIZE_IOMEM);
+   memset(paletteRAM, 1, SIZE_PRAM);
+   memset(vram, 1, SIZE_VRAM);
+   memset(oam, 1, SIZE_OAM);
+   memset(rom, 0, SIZE_ROM);
+   memset(pix, 1, gbaWidth * gbaHeight * 4);
+
+   if (rom == NULL || workRAM == NULL || bios == NULL || internalRAM == NULL ||
+      paletteRAM == NULL || vram == NULL || oam == NULL || pix == NULL || ioMem == NULL)
+   {
+      CPUCleanUp();
+      return false;
+   }
+
+   flashInit();
+   eepromInit();
+   CPUUpdateRenderBuffers(true);
+
+   return true;
 }

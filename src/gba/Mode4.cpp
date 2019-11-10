@@ -2,38 +2,17 @@
 #include "GBAGfx.h"
 #include "Globals.h"
 
-void mode4RenderLine()
+void mode4RenderLine(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (DISPCNT & 0x0080) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        gfxLastVCOUNT = VCOUNT;
-        return;
-    }
-
     if (layerEnable & 0x400) {
-        int changed = gfxBG2Changed;
-
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen256(BG2CNT, BG2X_L, BG2X_H, BG2Y_L, BG2Y_H,
-            BG2PA, BG2PB, BG2PC, BG2PD,
-            gfxBG2X, gfxBG2Y, changed,
-            line2);
+        gfxDrawRotScreen256(&lcd_bg[2]);
     }
 
-    gfxDrawSprites(lineOBJ);
+    gfxDrawSprites();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -77,44 +56,21 @@ void mode4RenderLine()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
-    gfxBG2Changed = 0;
-    gfxLastVCOUNT = VCOUNT;
 }
 
-void mode4RenderLineNoWindow()
+void mode4RenderLineNoWindow(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (DISPCNT & 0x0080) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        gfxLastVCOUNT = VCOUNT;
-        return;
-    }
-
     if (layerEnable & 0x400) {
-        int changed = gfxBG2Changed;
-
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen256(BG2CNT, BG2X_L, BG2X_H, BG2Y_L, BG2Y_H,
-            BG2PA, BG2PB, BG2PC, BG2PD,
-            gfxBG2X, gfxBG2Y, changed,
-            line2);
+        gfxDrawRotScreen256(&lcd_bg[2]);
     }
 
-    gfxDrawSprites(lineOBJ);
+    gfxDrawSprites();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -196,23 +152,13 @@ void mode4RenderLineNoWindow()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
-    gfxBG2Changed = 0;
-    gfxLastVCOUNT = VCOUNT;
 }
 
-void mode4RenderLineAll()
+void mode4RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-
-    if (DISPCNT & 0x0080) {
-        for (int x = 0; x < 240; x++) {
-            lineMix[x] = 0x7fff;
-        }
-        gfxLastVCOUNT = VCOUNT;
-        return;
-    }
 
     bool inWindow0 = false;
     bool inWindow1 = false;
@@ -237,26 +183,13 @@ void mode4RenderLineAll()
     }
 
     if (layerEnable & 0x400) {
-        int changed = gfxBG2Changed;
-
-        if (gfxLastVCOUNT > VCOUNT)
-            changed = 3;
-
-        gfxDrawRotScreen256(BG2CNT, BG2X_L, BG2X_H, BG2Y_L, BG2Y_H,
-            BG2PA, BG2PB, BG2PC, BG2PD,
-            gfxBG2X, gfxBG2Y, changed,
-            line2);
+        gfxDrawRotScreen256(&lcd_bg[2]);
     }
 
-    gfxDrawSprites(lineOBJ);
-    gfxDrawOBJWin(lineOBJWin);
+    gfxDrawSprites();
+    gfxDrawOBJWin();
 
-    uint32_t backdrop;
-    if (customBackdropColor == -1) {
-        backdrop = (READ16LE(&palette[0]) | 0x30000000);
-    } else {
-        backdrop = ((customBackdropColor & 0x7FFF) | 0x30000000);
-    }
+    uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     uint8_t inWin0Mask = WININ & 0xFF;
     uint8_t inWin1Mask = WININ >> 8;
@@ -358,8 +291,6 @@ void mode4RenderLineAll()
             }
         }
 
-        lineMix[x] = color;
+        lineMix[x] = MAKECOLOR(color);
     }
-    gfxBG2Changed = 0;
-    gfxLastVCOUNT = VCOUNT;
 }

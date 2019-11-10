@@ -49,7 +49,7 @@ extern void log(const char *, ...);
 extern bool systemPauseOnFrame();
 extern void systemGbPrint(uint8_t *, int, int, int, int, int);
 extern void systemScreenCapture(int);
-extern void systemDrawScreen();
+extern void systemDrawScreen(uint16_t*);
 // updates the joystick data
 extern bool systemReadJoypads();
 // return information about the given joystick, -1 for default joystick

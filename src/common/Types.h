@@ -26,4 +26,6 @@
 #include "cstdint.h"
 #endif
 
+typedef uint16_t pixFormat;
+
 #endif // __VBA_TYPES_H__

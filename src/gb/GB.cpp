@@ -22,7 +22,7 @@
 #define _stricmp strcasecmp
 #endif
 
-extern uint8_t* pix;
+extern pixFormat* pix;
 bool gbUpdateSizes();
 bool inBios = false;
 
@@ -3311,15 +3311,8 @@ void gbInit()
     gbGenFilter();
     gbSgbInit();
     setColorizerHack(false);
-
     gbMemory = (uint8_t*)malloc(65536);
-
-#ifdef __LIBRETRO__
-    pix = (uint8_t*)calloc(1, 4 * 256 * 224);
-#else
-    pix = (uint8_t*)calloc(1, 4 * 257 * 226);
-#endif
-
+    pix = (pixFormat*)calloc(1, 4 * 256 * 224);
     gbLineBuffer = (uint16_t*)malloc(160 * sizeof(uint16_t));
 }
 
@@ -3941,7 +3934,7 @@ static bool gbReadSaveState(gzFile gzFile)
         gbSgbRenderBorder();
     }
 
-    systemDrawScreen();
+    systemDrawScreen(pix);
 
     if (version > GBSAVE_GAME_VERSION_1) {
         if (skipSaveGameCheats) {
@@ -4063,16 +4056,18 @@ bool gbReadSaveState(const char* name)
 
 bool gbWritePNGFile(const char* fileName)
 {
-    if (gbBorderOn)
-        return utilWritePNGFile(fileName, 256, 224, pix);
-    return utilWritePNGFile(fileName, 160, 144, pix);
+    //if (gbBorderOn)
+        //return utilWritePNGFile(fileName, 256, 224, pix);
+    //return utilWritePNGFile(fileName, 160, 144, pix);
+    return false;
 }
 
 bool gbWriteBMPFile(const char* fileName)
 {
-    if (gbBorderOn)
-        return utilWriteBMPFile(fileName, 256, 224, pix);
-    return utilWriteBMPFile(fileName, 160, 144, pix);
+    //if (gbBorderOn)
+        //return utilWriteBMPFile(fileName, 256, 224, pix);
+    //return utilWriteBMPFile(fileName, 160, 144, pix);
+    return false;
 }
 
 void gbCleanUp()
@@ -4441,115 +4436,30 @@ int gbGetNextEvent(int _clockTicks)
 
 void gbDrawLine()
 {
-    switch (systemColorDepth) {
-    case 16: {
-#ifdef __LIBRETRO__
-        uint16_t* dest = (uint16_t*)pix + gbBorderLineSkip * (register_LY + gbBorderRowSkip)
+    pixFormat* dest = pix + gbBorderLineSkip * (register_LY + gbBorderRowSkip)
             + gbBorderColumnSkip;
-#else
-        uint16_t* dest = (uint16_t*)pix + (gbBorderLineSkip + 2) * (register_LY + gbBorderRowSkip + 1)
-            + gbBorderColumnSkip;
-#endif
-        for (int x = 0; x < 160;) {
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
+    for (int x = 0; x < 160;) {
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
 
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
 
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
 
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-            *dest++ = systemColorMap16[gbLineMix[x++]];
-        }
-        if (gbBorderOn)
-            dest += gbBorderColumnSkip;
-#ifndef __LIBRETRO__
-        *dest++ = 0; // for filters that read one pixel more
-#endif
-    } break;
-
-    case 24: {
-        uint8_t* dest = (uint8_t*)pix + 3 * (gbBorderLineSkip * (register_LY + gbBorderRowSkip) + gbBorderColumnSkip);
-        for (int x = 0; x < 160;) {
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-            *((uint32_t*)dest) = systemColorMap32[gbLineMix[x++]];
-            dest += 3;
-        }
-    } break;
-
-    case 32: {
-#ifdef __LIBRETRO__
-        uint32_t* dest = (uint32_t*)pix + gbBorderLineSkip * (register_LY + gbBorderRowSkip)
-            + gbBorderColumnSkip;
-#else
-        uint32_t* dest = (uint32_t*)pix + (gbBorderLineSkip + 1) * (register_LY + gbBorderRowSkip + 1)
-            + gbBorderColumnSkip;
-#endif
-        for (int x = 0; x < 160;) {
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-            *dest++ = systemColorMap32[gbLineMix[x++]];
-        }
-    } break;
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
+        *dest++ = systemColorMap16[gbLineMix[x++]];
     }
+    if (gbBorderOn) dest += gbBorderColumnSkip;
 }
 
 static void gbUpdateJoypads(bool readSensors)
@@ -5023,7 +4933,7 @@ void gbEmulate(int ticksToStop)
                                     if (gbBorderOn)
                                         gbSgbRenderBorder();
                                     //if (gbScreenOn)
-                                    systemDrawScreen();
+                                    systemDrawScreen(pix);
                                     if (systemPauseOnFrame())
                                         ticksToStop = 0;
                                 }
@@ -5176,7 +5086,7 @@ void gbEmulate(int ticksToStop)
                                 if (gbBorderOn)
                                     gbSgbRenderBorder();
                                 //if (gbScreenOn)
-                                systemDrawScreen();
+                                systemDrawScreen(pix);
                                 if (systemPauseOnFrame())
                                     ticksToStop = 0;
                             }

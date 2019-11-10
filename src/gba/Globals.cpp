@@ -18,20 +18,15 @@ uint32_t armNextPC = 0x00000000;
 int armMode = 0x1f;
 uint32_t stop = 0x08000568;
 
-// this is an optional hack to change the backdrop/background color:
-// -1: disabled
-// 0x0000 to 0x7FFF: set custom 15 bit color
-int customBackdropColor = -1;
-
 uint8_t* bios = 0;
 uint8_t* rom = 0;
 uint8_t* internalRAM = 0;
 uint8_t* workRAM = 0;
 uint8_t* paletteRAM = 0;
 uint8_t* vram = 0;
-uint8_t* pix = 0;
 uint8_t* oam = 0;
 uint8_t* ioMem = 0;
+pixFormat* pix = 0;
 
 uint16_t DISPCNT = 0x0080;
 uint16_t DISPSTAT = 0x0000;

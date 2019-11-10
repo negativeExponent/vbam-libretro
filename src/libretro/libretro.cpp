@@ -1698,10 +1698,9 @@ bool systemCanChangeSoundQuality(void)
     return true;
 }
 
-void systemDrawScreen(void)
+void systemDrawScreen(uint16_t* pix)
 {
-    unsigned pitch = systemWidth * (systemColorDepth >> 3);
-    video_cb(pix, systemWidth, systemHeight, pitch);
+    video_cb(pix, systemWidth, systemHeight, systemWidth << 1);
 }
 
 void systemFrame(void)

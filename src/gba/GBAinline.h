@@ -10,8 +10,6 @@
 #include "agbprint.h"
 #include "remote.h"
 
-extern const uint32_t objTilesAddress[3];
-
 extern bool stopState;
 extern bool holdState;
 extern int holdType;
@@ -44,6 +42,11 @@ uint8_t CPUReadByte(uint32_t);
 void CPUWriteMemory(uint32_t, uint32_t);
 void  CPUWriteHalfWord(uint32_t, uint16_t);
 void  CPUWriteByte(uint32_t, uint8_t);
+
+bool GBAMemoryInit(void);
+void GBAMemoryCleanup(void);
+
+void CPUCompareVCOUNT(void);
 
 #define CPUReadByteQuick(addr) map[(addr) >> 24].address[(addr)&map[(addr) >> 24].mask]
 #define CPUReadHalfWordQuick(addr) READ16LE(((uint16_t*)&map[(addr) >> 24].address[(addr)&map[(addr) >> 24].mask]))
