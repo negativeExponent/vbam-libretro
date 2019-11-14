@@ -5,7 +5,7 @@
 #include "Globals.h"
 #include "../common/Port.h"
 
-typedef struct 
+struct lcd_background_t
 {
     uint16_t control;
     uint16_t h_offset;
@@ -18,13 +18,13 @@ typedef struct
     int y_ref;
     int x_pos;
     int y_pos;
-} lcd_background_t;
+};
 
-typedef struct
+struct lcd_renderer_t
 {
     int mode;
     int type;
-} lcd_renderer_t;
+};
 
 //#define SPRITE_DEBUG
 

@@ -83,36 +83,9 @@ uint8_t freezeOAM[SIZE_OAM];
 bool debugger_last;
 #endif
 
+gba_dma_t dma[4];
+gba_timers_t timers;
 int lcdTicks = (useBios && !skipBios) ? 1008 : 208;
-uint8_t timerOnOffDelay = 0;
-uint16_t timer0Value = 0;
-bool timer0On = false;
-int timer0Ticks = 0;
-int timer0Reload = 0;
-int timer0ClockReload = 0;
-uint16_t timer1Value = 0;
-bool timer1On = false;
-int timer1Ticks = 0;
-int timer1Reload = 0;
-int timer1ClockReload = 0;
-uint16_t timer2Value = 0;
-bool timer2On = false;
-int timer2Ticks = 0;
-int timer2Reload = 0;
-int timer2ClockReload = 0;
-uint16_t timer3Value = 0;
-bool timer3On = false;
-int timer3Ticks = 0;
-int timer3Reload = 0;
-int timer3ClockReload = 0;
-uint32_t dma0Source = 0;
-uint32_t dma0Dest = 0;
-uint32_t dma1Source = 0;
-uint32_t dma1Dest = 0;
-uint32_t dma2Source = 0;
-uint32_t dma2Dest = 0;
-uint32_t dma3Source = 0;
-uint32_t dma3Dest = 0;
 void (*cpuSaveGameFunc)(uint32_t, uint8_t) = flashSaveDecide;
 bool fxOn = false;
 bool windowOn = false;
@@ -412,30 +385,30 @@ variable_desc saveGameStruct[] = {
     { &holdState, sizeof(bool) },
     { &holdType, sizeof(int) },
     { &lcdTicks, sizeof(int) },
-    { &timer0On, sizeof(bool) },
-    { &timer0Ticks, sizeof(int) },
-    { &timer0Reload, sizeof(int) },
-    { &timer0ClockReload, sizeof(int) },
-    { &timer1On, sizeof(bool) },
-    { &timer1Ticks, sizeof(int) },
-    { &timer1Reload, sizeof(int) },
-    { &timer1ClockReload, sizeof(int) },
-    { &timer2On, sizeof(bool) },
-    { &timer2Ticks, sizeof(int) },
-    { &timer2Reload, sizeof(int) },
-    { &timer2ClockReload, sizeof(int) },
-    { &timer3On, sizeof(bool) },
-    { &timer3Ticks, sizeof(int) },
-    { &timer3Reload, sizeof(int) },
-    { &timer3ClockReload, sizeof(int) },
-    { &dma0Source, sizeof(uint32_t) },
-    { &dma0Dest, sizeof(uint32_t) },
-    { &dma1Source, sizeof(uint32_t) },
-    { &dma1Dest, sizeof(uint32_t) },
-    { &dma2Source, sizeof(uint32_t) },
-    { &dma2Dest, sizeof(uint32_t) },
-    { &dma3Source, sizeof(uint32_t) },
-    { &dma3Dest, sizeof(uint32_t) },
+    { &timers.tm[0].On, sizeof(bool) },
+    { &timers.tm[0].Ticks, sizeof(int) },
+    { &timers.tm[0].Reload, sizeof(int) },
+    { &timers.tm[0].ClockReload, sizeof(int) },
+    { &timers.tm[1].On, sizeof(bool) },
+    { &timers.tm[1].Ticks, sizeof(int) },
+    { &timers.tm[1].Reload, sizeof(int) },
+    { &timers.tm[1].ClockReload, sizeof(int) },
+    { &timers.tm[2].On, sizeof(bool) },
+    { &timers.tm[2].Ticks, sizeof(int) },
+    { &timers.tm[2].Reload, sizeof(int) },
+    { &timers.tm[2].ClockReload, sizeof(int) },
+    { &timers.tm[3].On, sizeof(bool) },
+    { &timers.tm[3].Ticks, sizeof(int) },
+    { &timers.tm[3].Reload, sizeof(int) },
+    { &timers.tm[3].ClockReload, sizeof(int) },
+    { &dma[0].Source, sizeof(uint32_t) },
+    { &dma[0].Dest, sizeof(uint32_t) },
+    { &dma[1].Source, sizeof(uint32_t) },
+    { &dma[1].Dest, sizeof(uint32_t) },
+    { &dma[2].Source, sizeof(uint32_t) },
+    { &dma[2].Dest, sizeof(uint32_t) },
+    { &dma[3].Source, sizeof(uint32_t) },
+    { &dma[3].Dest, sizeof(uint32_t) },
     { &fxOn, sizeof(bool) },
     { &windowOn, sizeof(bool) },
     { &N_FLAG, sizeof(bool) },
@@ -474,17 +447,17 @@ inline int CPUUpdateTicks()
     if (soundTicks < cpuLoopTicks)
         cpuLoopTicks = soundTicks;
 
-    if (timer0On && (timer0Ticks < cpuLoopTicks)) {
-        cpuLoopTicks = timer0Ticks;
+    if (timers.tm[0].On && (timers.tm[0].Ticks < cpuLoopTicks)) {
+        cpuLoopTicks = timers.tm[0].Ticks;
     }
-    if (timer1On && !(TM1CNT & 4) && (timer1Ticks < cpuLoopTicks)) {
-        cpuLoopTicks = timer1Ticks;
+    if (timers.tm[1].On && !(TM1CNT & 4) && (timers.tm[1].Ticks < cpuLoopTicks)) {
+        cpuLoopTicks = timers.tm[1].Ticks;
     }
-    if (timer2On && !(TM2CNT & 4) && (timer2Ticks < cpuLoopTicks)) {
-        cpuLoopTicks = timer2Ticks;
+    if (timers.tm[2].On && !(TM2CNT & 4) && (timers.tm[2].Ticks < cpuLoopTicks)) {
+        cpuLoopTicks = timers.tm[2].Ticks;
     }
-    if (timer3On && !(TM3CNT & 4) && (timer3Ticks < cpuLoopTicks)) {
-        cpuLoopTicks = timer3Ticks;
+    if (timers.tm[3].On && !(TM3CNT & 4) && (timers.tm[3].Ticks < cpuLoopTicks)) {
+        cpuLoopTicks = timers.tm[3].Ticks;
     }
 #ifdef PROFILING
     if (profilingTicksReload != 0) {
@@ -514,7 +487,7 @@ extern uint32_t line3[240];
 
 #define CLEAR_ARRAY(a)                  \
     {                                   \
-        uint32_t* array = (a);               \
+        uint32_t* array = (a);          \
         for (int i = 0; i < 240; i++) { \
             *array++ = 0x80000000;      \
         }                               \
@@ -1870,12 +1843,12 @@ void CPUCheckDMA(int reason, int dmamask)
                 int count = (DM0CNT_L ? DM0CNT_L : 0x4000) << 1;
                 if (DM0CNT_H & 0x0400)
                     count <<= 1;
-                log("DMA0: s=%08x d=%08x c=%04x count=%08x\n", dma0Source, dma0Dest,
+                log("DMA0: s=%08x d=%08x c=%04x count=%08x\n", dma[0].Source, dma[0].Dest,
                     DM0CNT_H,
                     count);
             }
 #endif
-            doDMA(dma0Source, dma0Dest, sourceIncrement, destIncrement,
+            doDMA(dma[0].Source, dma[0].Dest, sourceIncrement, destIncrement,
                 DM0CNT_L ? DM0CNT_L : 0x4000,
                 DM0CNT_H & 0x0400);
 
@@ -1886,7 +1859,7 @@ void CPUCheckDMA(int reason, int dmamask)
             }
 
             if (((DM0CNT_H >> 5) & 3) == 3) {
-                dma0Dest = DM0DAD_L | (DM0DAD_H << 16);
+                dma[0].Dest = DM0DAD_L | (DM0DAD_H << 16);
             }
 
             if (!(DM0CNT_H & 0x0200) || (reason == 0)) {
@@ -1924,12 +1897,12 @@ void CPUCheckDMA(int reason, int dmamask)
             if (reason == 3) {
 #ifdef GBA_LOGGING
                 if (systemVerbose & VERBOSE_DMA1) {
-                    log("DMA1: s=%08x d=%08x c=%04x count=%08x\n", dma1Source, dma1Dest,
+                    log("DMA1: s=%08x d=%08x c=%04x count=%08x\n", dma[1].Source, dma[1].Dest,
                         DM1CNT_H,
                         16);
                 }
 #endif
-                doDMA(dma1Source, dma1Dest, sourceIncrement, 0, 4,
+                doDMA(dma[1].Source, dma[1].Dest, sourceIncrement, 0, 4,
                     0x0400);
             } else {
 #ifdef GBA_LOGGING
@@ -1937,12 +1910,12 @@ void CPUCheckDMA(int reason, int dmamask)
                     int count = (DM1CNT_L ? DM1CNT_L : 0x4000) << 1;
                     if (DM1CNT_H & 0x0400)
                         count <<= 1;
-                    log("DMA1: s=%08x d=%08x c=%04x count=%08x\n", dma1Source, dma1Dest,
+                    log("DMA1: s=%08x d=%08x c=%04x count=%08x\n", dma[1].Source, dma[1].Dest,
                         DM1CNT_H,
                         count);
                 }
 #endif
-                doDMA(dma1Source, dma1Dest, sourceIncrement, destIncrement,
+                doDMA(dma[1].Source, dma[1].Dest, sourceIncrement, destIncrement,
                     DM1CNT_L ? DM1CNT_L : 0x4000,
                     DM1CNT_H & 0x0400);
             }
@@ -1954,7 +1927,7 @@ void CPUCheckDMA(int reason, int dmamask)
             }
 
             if (((DM1CNT_H >> 5) & 3) == 3) {
-                dma1Dest = DM1DAD_L | (DM1DAD_H << 16);
+                dma[1].Dest = DM1DAD_L | (DM1DAD_H << 16);
             }
 
             if (!(DM1CNT_H & 0x0200) || (reason == 0)) {
@@ -1993,12 +1966,12 @@ void CPUCheckDMA(int reason, int dmamask)
 #ifdef GBA_LOGGING
                 if (systemVerbose & VERBOSE_DMA2) {
                     int count = (4) << 2;
-                    log("DMA2: s=%08x d=%08x c=%04x count=%08x\n", dma2Source, dma2Dest,
+                    log("DMA2: s=%08x d=%08x c=%04x count=%08x\n", dma[2].Source, dma[2].Dest,
                         DM2CNT_H,
                         count);
                 }
 #endif
-                doDMA(dma2Source, dma2Dest, sourceIncrement, 0, 4,
+                doDMA(dma[2].Source, dma[2].Dest, sourceIncrement, 0, 4,
                     0x0400);
             } else {
 #ifdef GBA_LOGGING
@@ -2006,12 +1979,12 @@ void CPUCheckDMA(int reason, int dmamask)
                     int count = (DM2CNT_L ? DM2CNT_L : 0x4000) << 1;
                     if (DM2CNT_H & 0x0400)
                         count <<= 1;
-                    log("DMA2: s=%08x d=%08x c=%04x count=%08x\n", dma2Source, dma2Dest,
+                    log("DMA2: s=%08x d=%08x c=%04x count=%08x\n", dma[2].Source, dma[2].Dest,
                         DM2CNT_H,
                         count);
                 }
 #endif
-                doDMA(dma2Source, dma2Dest, sourceIncrement, destIncrement,
+                doDMA(dma[2].Source, dma[2].Dest, sourceIncrement, destIncrement,
                     DM2CNT_L ? DM2CNT_L : 0x4000,
                     DM2CNT_H & 0x0400);
             }
@@ -2023,7 +1996,7 @@ void CPUCheckDMA(int reason, int dmamask)
             }
 
             if (((DM2CNT_H >> 5) & 3) == 3) {
-                dma2Dest = DM2DAD_L | (DM2DAD_H << 16);
+                dma[2].Dest = DM2DAD_L | (DM2DAD_H << 16);
             }
 
             if (!(DM2CNT_H & 0x0200) || (reason == 0)) {
@@ -2063,12 +2036,12 @@ void CPUCheckDMA(int reason, int dmamask)
                 int count = (DM3CNT_L ? DM3CNT_L : 0x10000) << 1;
                 if (DM3CNT_H & 0x0400)
                     count <<= 1;
-                log("DMA3: s=%08x d=%08x c=%04x count=%08x\n", dma3Source, dma3Dest,
+                log("DMA3: s=%08x d=%08x c=%04x count=%08x\n", dma[3].Source, dma[3].Dest,
                     DM3CNT_H,
                     count);
             }
 #endif
-            doDMA(dma3Source, dma3Dest, sourceIncrement, destIncrement,
+            doDMA(dma[3].Source, dma[3].Dest, sourceIncrement, destIncrement,
                 DM3CNT_L ? DM3CNT_L : 0x10000,
                 DM3CNT_H & 0x0400);
 
@@ -2079,7 +2052,7 @@ void CPUCheckDMA(int reason, int dmamask)
             }
 
             if (((DM3CNT_H >> 5) & 3) == 3) {
-                dma3Dest = DM3DAD_L | (DM3DAD_H << 16);
+                dma[3].Dest = DM3DAD_L | (DM3DAD_H << 16);
             }
 
             if (!(DM3CNT_H & 0x0200) || (reason == 0)) {
@@ -2092,59 +2065,59 @@ void CPUCheckDMA(int reason, int dmamask)
 
 void applyTimer()
 {
-    if (timerOnOffDelay & 1) {
-        timer0ClockReload = TIMER_TICKS[timer0Value & 3];
-        if (!timer0On && (timer0Value & 0x80)) {
+    if (timers.OnOffDelay & 1) {
+        timers.tm[0].ClockReload = TIMER_TICKS[timers.tm[0].Value & 3];
+        if (!timers.tm[0].On && (timers.tm[0].Value & 0x80)) {
             // reload the counter
-            TM0D = timer0Reload;
-            timer0Ticks = (0x10000 - TM0D) << timer0ClockReload;
+            TM0D = timers.tm[0].Reload;
+            timers.tm[0].Ticks = (0x10000 - TM0D) << timers.tm[0].ClockReload;
             UPDATE_REG(0x100, TM0D);
         }
-        timer0On = timer0Value & 0x80 ? true : false;
-        TM0CNT = timer0Value & 0xC7;
+        timers.tm[0].On = timers.tm[0].Value & 0x80 ? true : false;
+        TM0CNT = timers.tm[0].Value & 0xC7;
         interp_rate();
         UPDATE_REG(0x102, TM0CNT);
         //    CPUUpdateTicks();
     }
-    if (timerOnOffDelay & 2) {
-        timer1ClockReload = TIMER_TICKS[timer1Value & 3];
-        if (!timer1On && (timer1Value & 0x80)) {
+    if (timers.OnOffDelay & 2) {
+        timers.tm[1].ClockReload = TIMER_TICKS[timers.tm[1].Value & 3];
+        if (!timers.tm[1].On && (timers.tm[1].Value & 0x80)) {
             // reload the counter
-            TM1D = timer1Reload;
-            timer1Ticks = (0x10000 - TM1D) << timer1ClockReload;
+            TM1D = timers.tm[1].Reload;
+            timers.tm[1].Ticks = (0x10000 - TM1D) << timers.tm[1].ClockReload;
             UPDATE_REG(0x104, TM1D);
         }
-        timer1On = timer1Value & 0x80 ? true : false;
-        TM1CNT = timer1Value & 0xC7;
+        timers.tm[1].On = timers.tm[1].Value & 0x80 ? true : false;
+        TM1CNT = timers.tm[1].Value & 0xC7;
         interp_rate();
         UPDATE_REG(0x106, TM1CNT);
     }
-    if (timerOnOffDelay & 4) {
-        timer2ClockReload = TIMER_TICKS[timer2Value & 3];
-        if (!timer2On && (timer2Value & 0x80)) {
+    if (timers.OnOffDelay & 4) {
+        timers.tm[2].ClockReload = TIMER_TICKS[timers.tm[2].Value & 3];
+        if (!timers.tm[2].On && (timers.tm[2].Value & 0x80)) {
             // reload the counter
-            TM2D = timer2Reload;
-            timer2Ticks = (0x10000 - TM2D) << timer2ClockReload;
+            TM2D = timers.tm[2].Reload;
+            timers.tm[2].Ticks = (0x10000 - TM2D) << timers.tm[2].ClockReload;
             UPDATE_REG(0x108, TM2D);
         }
-        timer2On = timer2Value & 0x80 ? true : false;
-        TM2CNT = timer2Value & 0xC7;
+        timers.tm[2].On = timers.tm[2].Value & 0x80 ? true : false;
+        TM2CNT = timers.tm[2].Value & 0xC7;
         UPDATE_REG(0x10A, TM2CNT);
     }
-    if (timerOnOffDelay & 8) {
-        timer3ClockReload = TIMER_TICKS[timer3Value & 3];
-        if (!timer3On && (timer3Value & 0x80)) {
+    if (timers.OnOffDelay & 8) {
+        timers.tm[3].ClockReload = TIMER_TICKS[timers.tm[3].Value & 3];
+        if (!timers.tm[3].On && (timers.tm[3].Value & 0x80)) {
             // reload the counter
-            TM3D = timer3Reload;
-            timer3Ticks = (0x10000 - TM3D) << timer3ClockReload;
+            TM3D = timers.tm[3].Reload;
+            timers.tm[3].Ticks = (0x10000 - TM3D) << timers.tm[3].ClockReload;
             UPDATE_REG(0x10C, TM3D);
         }
-        timer3On = timer3Value & 0x80 ? true : false;
-        TM3CNT = timer3Value & 0xC7;
+        timers.tm[3].On = timers.tm[3].Value & 0x80 ? true : false;
+        TM3CNT = timers.tm[3].Value & 0xC7;
         UPDATE_REG(0x10E, TM3CNT);
     }
     cpuNextEvent = CPUUpdateTicks();
-    timerOnOffDelay = 0;
+    timers.OnOffDelay = 0;
 }
 
 uint8_t cpuBitsSet[256];
@@ -2451,31 +2424,18 @@ void CPUReset()
     biosProtected[2] = 0x29;
     biosProtected[3] = 0xe1;
 
-    lcdTicks = (useBios && !skipBios) ? 1008 : 208;
-    timer0On = false;
-    timer0Ticks = 0;
-    timer0Reload = 0;
-    timer0ClockReload = 0;
-    timer1On = false;
-    timer1Ticks = 0;
-    timer1Reload = 0;
-    timer1ClockReload = 0;
-    timer2On = false;
-    timer2Ticks = 0;
-    timer2Reload = 0;
-    timer2ClockReload = 0;
-    timer3On = false;
-    timer3Ticks = 0;
-    timer3Reload = 0;
-    timer3ClockReload = 0;
-    dma0Source = 0;
-    dma0Dest = 0;
-    dma1Source = 0;
-    dma1Dest = 0;
-    dma2Source = 0;
-    dma2Dest = 0;
-    dma3Source = 0;
-    dma3Dest = 0;
+    for (int i = 0; i < 4; i++) {
+        timers.tm[i].On = false;
+        timers.tm[i].Ticks = 0;
+        timers.tm[i].Reload = 0;
+        timers.tm[i].ClockReload = 0;
+    }
+    for (int i = 0; i < 4; i++) {
+        dma[i].Source = 0;
+        dma[i].Dest = 0;
+    }
+
+    lcdTicks = (useBios && !skipBios) ? 1008 : 208;    
     frameCount = 0;
     layerEnable = DISPCNT & layerSettings;
 
@@ -2784,12 +2744,12 @@ updateLoop:
 
             if (!stopState)
             {
-               if (timer0On)
+               if (timers.tm[0].On)
                {
-                  timer0Ticks -= clockTicks;
-                  if (timer0Ticks <= 0)
+                  timers.tm[0].Ticks -= clockTicks;
+                  if (timers.tm[0].Ticks <= 0)
                   {
-                     timer0Ticks += (0x10000 - timer0Reload) << timer0ClockReload;
+                     timers.tm[0].Ticks += (0x10000 - timers.tm[0].Reload) << timers.tm[0].ClockReload;
                      timerOverflow |= 1;
                      soundTimerOverflow(0);
                      if (TM0CNT & 0x40)
@@ -2798,11 +2758,11 @@ updateLoop:
                         UPDATE_REG(0x202, IF);
                      }
                   }
-                  TM0D = 0xFFFF - (timer0Ticks >> timer0ClockReload);
+                  TM0D = 0xFFFF - (timers.tm[0].Ticks >> timers.tm[0].ClockReload);
                   UPDATE_REG(0x100, TM0D);
                }
 
-               if (timer1On)
+               if (timers.tm[1].On)
                {
                   if (TM1CNT & 4)
                   {
@@ -2811,7 +2771,7 @@ updateLoop:
                         TM1D++;
                         if (TM1D == 0)
                         {
-                           TM1D += timer1Reload;
+                           TM1D += timers.tm[1].Reload;
                            timerOverflow |= 2;
                            soundTimerOverflow(1);
                            if (TM1CNT & 0x40)
@@ -2825,10 +2785,10 @@ updateLoop:
                   }
                   else
                   {
-                     timer1Ticks -= clockTicks;
-                     if (timer1Ticks <= 0)
+                     timers.tm[1].Ticks -= clockTicks;
+                     if (timers.tm[1].Ticks <= 0)
                      {
-                        timer1Ticks += (0x10000 - timer1Reload) << timer1ClockReload;
+                        timers.tm[1].Ticks += (0x10000 - timers.tm[1].Reload) << timers.tm[1].ClockReload;
                         timerOverflow |= 2;
                         soundTimerOverflow(1);
                         if (TM1CNT & 0x40)
@@ -2837,12 +2797,12 @@ updateLoop:
                            UPDATE_REG(0x202, IF);
                         }
                      }
-                     TM1D = 0xFFFF - (timer1Ticks >> timer1ClockReload);
+                     TM1D = 0xFFFF - (timers.tm[1].Ticks >> timers.tm[1].ClockReload);
                      UPDATE_REG(0x104, TM1D);
                   }
                }
 
-               if (timer2On)
+               if (timers.tm[2].On)
                {
                   if (TM2CNT & 4)
                   {
@@ -2851,7 +2811,7 @@ updateLoop:
                         TM2D++;
                         if (TM2D == 0)
                         {
-                           TM2D += timer2Reload;
+                           TM2D += timers.tm[2].Reload;
                            timerOverflow |= 4;
                            if (TM2CNT & 0x40)
                            {
@@ -2864,10 +2824,10 @@ updateLoop:
                   }
                   else
                   {
-                     timer2Ticks -= clockTicks;
-                     if (timer2Ticks <= 0)
+                     timers.tm[2].Ticks -= clockTicks;
+                     if (timers.tm[2].Ticks <= 0)
                      {
-                        timer2Ticks += (0x10000 - timer2Reload) << timer2ClockReload;
+                        timers.tm[2].Ticks += (0x10000 - timers.tm[2].Reload) << timers.tm[2].ClockReload;
                         timerOverflow |= 4;
                         if (TM2CNT & 0x40)
                         {
@@ -2875,12 +2835,12 @@ updateLoop:
                            UPDATE_REG(0x202, IF);
                         }
                      }
-                     TM2D = 0xFFFF - (timer2Ticks >> timer2ClockReload);
+                     TM2D = 0xFFFF - (timers.tm[2].Ticks >> timers.tm[2].ClockReload);
                      UPDATE_REG(0x108, TM2D);
                   }
                }
 
-               if (timer3On)
+               if (timers.tm[3].On)
                {
                   if (TM3CNT & 4)
                   {
@@ -2889,7 +2849,7 @@ updateLoop:
                         TM3D++;
                         if (TM3D == 0)
                         {
-                           TM3D += timer3Reload;
+                           TM3D += timers.tm[3].Reload;
                            if (TM3CNT & 0x40)
                            {
                               IF |= 0x40;
@@ -2901,17 +2861,17 @@ updateLoop:
                   }
                   else
                   {
-                     timer3Ticks -= clockTicks;
-                     if (timer3Ticks <= 0)
+                     timers.tm[3].Ticks -= clockTicks;
+                     if (timers.tm[3].Ticks <= 0)
                      {
-                        timer3Ticks += (0x10000 - timer3Reload) << timer3ClockReload;
+                        timers.tm[3].Ticks += (0x10000 - timers.tm[3].Reload) << timers.tm[3].ClockReload;
                         if (TM3CNT & 0x40)
                         {
                            IF |= 0x40;
                            UPDATE_REG(0x202, IF);
                         }
                      }
-                     TM3D = 0xFFFF - (timer3Ticks >> timer3ClockReload);
+                     TM3D = 0xFFFF - (timers.tm[3].Ticks >> timers.tm[3].ClockReload);
                      UPDATE_REG(0x10C, TM3D);
                   }
                }
@@ -3010,7 +2970,7 @@ updateLoop:
                 goto updateLoop;
             }
 
-            if (timerOnOffDelay)
+            if (timers.OnOffDelay)
                 applyTimer();
 
             if (cpuNextEvent > ticks)

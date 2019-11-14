@@ -5,36 +5,6 @@
 extern int layerEnableDelay;
 extern bool windowOn;
 extern bool fxOn;
-extern uint8_t timerOnOffDelay;
-extern uint16_t timer0Value;
-extern bool timer0On;
-extern int timer0Ticks;
-extern int timer0Reload;
-extern int timer0ClockReload;
-extern uint16_t timer1Value;
-extern bool timer1On;
-extern int timer1Ticks;
-extern int timer1Reload;
-extern int timer1ClockReload;
-extern uint16_t timer2Value;
-extern bool timer2On;
-extern int timer2Ticks;
-extern int timer2Reload;
-extern int timer2ClockReload;
-extern uint16_t timer3Value;
-extern bool timer3On;
-extern int timer3Ticks;
-extern int timer3Reload;
-extern int timer3ClockReload;
-extern uint32_t dma0Source;
-extern uint32_t dma0Dest;
-extern uint32_t dma1Source;
-extern uint32_t dma1Dest;
-extern uint32_t dma2Source;
-extern uint32_t dma2Dest;
-extern uint32_t dma3Source;
-extern uint32_t dma3Dest;
-
 static const uint32_t objTilesAddress[3] = { 0x010000, 0x014000, 0x014000 };
 static const uint8_t gamepakRamWaitState[4] = { 4, 3, 2, 8 };
 static const uint8_t gamepakWaitState[4] = { 4, 3, 2, 8 };
@@ -340,8 +310,8 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         UPDATE_REG(0xBA, DM0CNT_H);
 
         if (start && (value & 0x8000)) {
-            dma0Source = DM0SAD_L | (DM0SAD_H << 16);
-            dma0Dest = DM0DAD_L | (DM0DAD_H << 16);
+            dma[0].Source = DM0SAD_L | (DM0SAD_H << 16);
+            dma[0].Dest = DM0DAD_L | (DM0DAD_H << 16);
             CPUCheckDMA(0, 1);
         }
     } break;
@@ -373,8 +343,8 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         UPDATE_REG(0xC6, DM1CNT_H);
 
         if (start && (value & 0x8000)) {
-            dma1Source = DM1SAD_L | (DM1SAD_H << 16);
-            dma1Dest = DM1DAD_L | (DM1DAD_H << 16);
+            dma[1].Source = DM1SAD_L | (DM1SAD_H << 16);
+            dma[1].Dest = DM1DAD_L | (DM1DAD_H << 16);
             CPUCheckDMA(0, 2);
         }
     } break;
@@ -407,8 +377,8 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         UPDATE_REG(0xD2, DM2CNT_H);
 
         if (start && (value & 0x8000)) {
-            dma2Source = DM2SAD_L | (DM2SAD_H << 16);
-            dma2Dest = DM2DAD_L | (DM2DAD_H << 16);
+            dma[2].Source = DM2SAD_L | (DM2SAD_H << 16);
+            dma[2].Dest = DM2DAD_L | (DM2DAD_H << 16);
 
             CPUCheckDMA(0, 4);
         }
@@ -442,43 +412,43 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         UPDATE_REG(0xDE, DM3CNT_H);
 
         if (start && (value & 0x8000)) {
-            dma3Source = DM3SAD_L | (DM3SAD_H << 16);
-            dma3Dest = DM3DAD_L | (DM3DAD_H << 16);
+            dma[3].Source = DM3SAD_L | (DM3SAD_H << 16);
+            dma[3].Dest = DM3DAD_L | (DM3DAD_H << 16);
             CPUCheckDMA(0, 8);
         }
     } break;
     case 0x100:
-        timer0Reload = value;
+        timers.tm[0].Reload = value;
         interp_rate();
         break;
     case 0x102:
-        timer0Value = value;
-        timerOnOffDelay |= 1;
+        timers.tm[0].Value = value;
+        timers.OnOffDelay |= 1;
         cpuNextEvent = cpuTotalTicks;
         break;
     case 0x104:
-        timer1Reload = value;
+        timers.tm[1].Reload = value;
         interp_rate();
         break;
     case 0x106:
-        timer1Value = value;
-        timerOnOffDelay |= 2;
+        timers.tm[1].Value = value;
+        timers.OnOffDelay |= 2;
         cpuNextEvent = cpuTotalTicks;
         break;
     case 0x108:
-        timer2Reload = value;
+        timers.tm[2].Reload = value;
         break;
     case 0x10A:
-        timer2Value = value;
-        timerOnOffDelay |= 4;
+        timers.tm[2].Value = value;
+        timers.OnOffDelay |= 4;
         cpuNextEvent = cpuTotalTicks;
         break;
     case 0x10C:
-        timer3Reload = value;
+        timers.tm[3].Reload = value;
         break;
     case 0x10E:
-        timer3Value = value;
-        timerOnOffDelay |= 8;
+        timers.tm[3].Value = value;
+        timers.OnOffDelay |= 8;
         cpuNextEvent = cpuTotalTicks;
         break;
 
@@ -490,18 +460,7 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
     case COMM_SIODATA8:
         UPDATE_REG(COMM_SIODATA8, value);
         break;
-#endif
 
-    case 0x130:
-        P1 |= (value & 0x3FF);
-        UPDATE_REG(0x130, P1);
-        break;
-
-    case 0x132:
-        UPDATE_REG(0x132, value & 0xC3FF);
-        break;
-
-#ifndef NO_LINK
     case COMM_RCNT:
         StartGPLink(value);
         break;
@@ -542,6 +501,14 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         break;
 #endif
 
+    case 0x130:
+        P1 |= (value & 0x3FF);
+        UPDATE_REG(0x130, P1);
+        break;
+
+    case 0x132:
+        UPDATE_REG(0x132, value & 0xC3FF);
+        break;
     case 0x200:
         IE = value & 0x3FFF;
         UPDATE_REG(0x200, IE);
@@ -752,27 +719,27 @@ uint32_t CPUReadHalfWord(uint32_t address)
                switch (address & 0x10F)
                {
                   case 0x100:
-                     if (timer0On)
+                     if (timers.tm[0].On)
                      {
-                        value = 0xFFFF - ((timer0Ticks - cpuTotalTicks) >> timer0ClockReload);
+                        value = 0xFFFF - ((timers.tm[0].Ticks - cpuTotalTicks) >> timers.tm[0].ClockReload);
                      }
                      break;
                   case 0x104:
-                     if (timer1On && !(TM1CNT & 4))
+                     if (timers.tm[1].On && !(TM1CNT & 4))
                      {
-                        value = 0xFFFF - ((timer1Ticks - cpuTotalTicks) >> timer1ClockReload);
+                        value = 0xFFFF - ((timers.tm[1].Ticks - cpuTotalTicks) >> timers.tm[1].ClockReload);
                      }
                      break;
                   case 0x108:
-                     if (timer2On && !(TM2CNT & 4))
+                     if (timers.tm[2].On && !(TM2CNT & 4))
                      {
-                        value = 0xFFFF - ((timer2Ticks - cpuTotalTicks) >> timer2ClockReload);
+                        value = 0xFFFF - ((timers.tm[2].Ticks - cpuTotalTicks) >> timers.tm[2].ClockReload);
                      }
                      break;
                   case 0x10C:
-                     if (timer3On && !(TM3CNT & 4))
+                     if (timers.tm[3].On && !(TM3CNT & 4))
                      {
-                        value = 0xFFFF - ((timer3Ticks - cpuTotalTicks) >> timer3ClockReload);
+                        value = 0xFFFF - ((timers.tm[3].Ticks - cpuTotalTicks) >> timers.tm[3].ClockReload);
                      }
                      break;
                }
@@ -1282,7 +1249,7 @@ bool GBAMemoryInit(void)
    vram = (uint8_t*)malloc(SIZE_VRAM);
    oam = (uint8_t*)malloc(SIZE_OAM);
    rom = (uint8_t*)malloc(SIZE_ROM);
-   pix = (pixFormat*)malloc(gbaWidth * gbaHeight * 4);
+   pix = (pixFormat*)malloc(GBA_WIDTH * GBA_HEIGHT * 4);
 
    memset(bios, 1, SIZE_BIOS);
    memset(workRAM, 1, SIZE_WRAM);
@@ -1292,7 +1259,7 @@ bool GBAMemoryInit(void)
    memset(vram, 1, SIZE_VRAM);
    memset(oam, 1, SIZE_OAM);
    memset(rom, 0, SIZE_ROM);
-   memset(pix, 1, gbaWidth * gbaHeight * 4);
+   memset(pix, 1, GBA_WIDTH * GBA_HEIGHT * 4);
 
    if (rom == NULL || workRAM == NULL || bios == NULL || internalRAM == NULL ||
       paletteRAM == NULL || vram == NULL || oam == NULL || pix == NULL || ioMem == NULL)

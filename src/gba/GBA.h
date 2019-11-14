@@ -19,27 +19,33 @@ const uint64_t TICKS_PER_SECOND = 16777216;
 #define SAVE_GAME_VERSION_10 10
 #define SAVE_GAME_VERSION SAVE_GAME_VERSION_10
 
-#define gbaWidth  240
-#define gbaHeight 160
-
-enum {
-    GBA_SAVE_AUTO = 0,
-    GBA_SAVE_EEPROM,
-    GBA_SAVE_SRAM,
-    GBA_SAVE_FLASH,
-    GBA_SAVE_EEPROM_SENSOR,
-    GBA_SAVE_NONE
+enum gba_geometry
+{
+    GBA_WIDTH  = 240,
+    GBA_HEIGHT = 160
 };
 
-enum {
-    SIZE_SRAM      = 32768,
+enum gba_savetype
+{
+    GBA_SAVE_AUTO          = 0,
+    GBA_SAVE_EEPROM        = 1,
+    GBA_SAVE_SRAM          = 2,
+    GBA_SAVE_FLASH         = 3,
+    GBA_SAVE_EEPROM_SENSOR = 4,
+    GBA_SAVE_NONE          = 5
+};
+
+enum gba_savetype_size
+{
+    SIZE_SRAM       = 32768,
     SIZE_FLASH512   = 65536,
-    SIZE_FLASH1M   = 131072,
+    SIZE_FLASH1M    = 131072,
     SIZE_EEPROM_512 = 512,
-    SIZE_EEPROM_8K = 8192
+    SIZE_EEPROM_8K  = 8192
 };
 
-enum {
+enum gba_memory_size
+{
     SIZE_ROM   = 0x2000000,
     SIZE_BIOS  = 0x0004000,
     SIZE_IRAM  = 0x0008000,
@@ -49,9 +55,9 @@ enum {
     SIZE_OAM   = 0x0000400,
     SIZE_IOMEM = 0x0000400,
 #ifndef __LIBRETRO__
-    SIZE_PIX   = (4 * 241 * 162)
+    SIZE_PIX = (4 * 241 * 162)
 #else
-    SIZE_PIX   = (4 * 240 * 160)
+    SIZE_PIX = (4 * 240 * 160)
 #endif
 };
 
@@ -96,9 +102,28 @@ typedef union {
 #endif
 } reg_pair;
 
-#ifndef NO_GBA_MAP
+struct gba_timers_t
+{
+    struct timers_t
+    {
+        uint16_t Value;
+        bool On;
+        int Ticks;
+        int Reload;
+        int ClockReload;
+    } tm[4];
+    uint8_t OnOffDelay;
+};
+
+struct gba_dma_t
+{
+    uint32_t Source;
+    uint32_t Dest;
+};
+
+extern gba_dma_t dma[4];
+extern gba_timers_t timers;
 extern memoryMap map[256];
-#endif
 
 extern uint8_t biosProtected[4];
 

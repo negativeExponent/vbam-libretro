@@ -58,8 +58,8 @@ static double option_sndFiltering = 0.5;
 static unsigned option_gbPalette = 0;
 
 static unsigned retropad_device[4] = {0};
-static unsigned systemWidth = gbaWidth;
-static unsigned systemHeight = gbaHeight;
+static unsigned systemWidth = GBA_WIDTH;
+static unsigned systemHeight = GBA_HEIGHT;
 static EmulatedSystem* core = NULL;
 static IMAGE_TYPE type = IMAGE_UNKNOWN;
 
@@ -576,8 +576,8 @@ void retro_get_system_info(struct retro_system_info *info)
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
    double aspect = (3.0f / 2.0f);
-   unsigned maxWidth  = gbaWidth;
-   unsigned maxHeight = gbaHeight;
+   unsigned maxWidth  = GBA_WIDTH;
+   unsigned maxHeight = GBA_HEIGHT;
 
    if (type == IMAGE_GB) {
       aspect = !gbBorderOn ? (10.0 / 9.0) : (8.0 / 7.0);
@@ -889,8 +889,8 @@ static void gba_init(void)
     }
     CPUInit(biosfile, option_useBios);
 
-    systemWidth = gbaWidth;
-    systemHeight = gbaHeight;
+    systemWidth = GBA_WIDTH;
+    systemHeight = GBA_HEIGHT;
 
     CPUReset();
 }
