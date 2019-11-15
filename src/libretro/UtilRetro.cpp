@@ -13,9 +13,7 @@
 #include "gba/GBA.h"
 #include "gba/Globals.h"
 #include "gba/RTC.h"
-
 #include "gb/gbGlobals.h"
-#include "gba/gbafilter.h"
 
 #ifndef _MSC_VER
 #include <strings.h>
@@ -34,8 +32,6 @@ int  cheatsEnabled       = 0;
 int  layerSettings       = 0xff00;
 int  layerEnable         = 0xff00;
 bool speedup             = false;
-bool parseDebug          = false;
-bool speedHack           = false;
 bool mirroringEnable     = false;
 bool cpuIsMultiBoot      = false;
 

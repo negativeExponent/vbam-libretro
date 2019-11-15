@@ -13,7 +13,7 @@ const int GB_Z_FLAG = 0x80;
 
 typedef union {
     struct {
-#ifdef WORDS_BIGENDIAN
+#ifdef MSB_FIRST
         uint8_t B1, B0;
 #else
         uint8_t B0, B1;

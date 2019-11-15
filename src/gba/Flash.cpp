@@ -56,33 +56,6 @@ void flashSetSize(int size)
     flashSize = size;
 }
 
-uint8_t flashRead(uint32_t address)
-{
-    //  log("Reading %08x from %08x\n", address, reg[15].I);
-    //  log("Current read state is %d\n", flashReadState);
-    address &= 0xFFFF;
-
-    switch (flashReadState) {
-    case FLASH_READ_ARRAY:
-        return flashSaveMemory[(flashBank << 16) + address];
-    case FLASH_AUTOSELECT:
-        switch (address & 0xFF) {
-        case 0:
-            // manufacturer ID
-            return flashManufacturerID;
-        case 1:
-            // device ID
-            return flashDeviceID;
-        }
-        break;
-    case FLASH_ERASE_COMPLETE:
-        flashState = FLASH_READ_ARRAY;
-        flashReadState = FLASH_READ_ARRAY;
-        return 0xFF;
-    };
-    return 0;
-}
-
 void flashSaveDecide(uint32_t address, uint8_t byte)
 {
     if (saveType == GBA_SAVE_EEPROM)
@@ -111,6 +84,33 @@ void flashDelayedWrite(uint32_t address, uint8_t byte)
     saveType = GBA_SAVE_FLASH;
     cpuSaveGameFunc = flashWrite;
     flashWrite(address, byte);
+}
+
+uint8_t flashRead(uint32_t address)
+{
+    //  log("Reading %08x from %08x\n", address, reg[15].I);
+    //  log("Current read state is %d\n", flashReadState);
+    address &= 0xFFFF;
+
+    switch (flashReadState) {
+    case FLASH_READ_ARRAY:
+        return flashSaveMemory[(flashBank << 16) + address];
+    case FLASH_AUTOSELECT:
+        switch (address & 0xFF) {
+        case 0:
+            // manufacturer ID
+            return flashManufacturerID;
+        case 1:
+            // device ID
+            return flashDeviceID;
+        }
+        break;
+    case FLASH_ERASE_COMPLETE:
+        flashState = FLASH_READ_ARRAY;
+        flashReadState = FLASH_READ_ARRAY;
+        return 0xFF;
+    };
+    return 0;
 }
 
 void flashWrite(uint32_t address, uint8_t byte)
@@ -213,7 +213,7 @@ void flashWrite(uint32_t address, uint8_t byte)
     }
 }
 
-static variable_desc flashSaveData3[] = {
+static variable_desc flashSaveData[] = {
     { &flashState, sizeof(int) },
     { &flashReadState, sizeof(int) },
     { &flashSize, sizeof(int) },
@@ -222,60 +222,12 @@ static variable_desc flashSaveData3[] = {
     { NULL, 0 }
 };
 
-#ifdef __LIBRETRO__
 void flashSaveGame(uint8_t*& data)
 {
-    utilWriteDataMem(data, flashSaveData3);
+    utilWriteDataMem(data, flashSaveData);
 }
 
 void flashReadGame(const uint8_t*& data, int)
 {
-    utilReadDataMem(data, flashSaveData3);
+    utilReadDataMem(data, flashSaveData);
 }
-
-#else // !__LIBRETRO__
-static variable_desc flashSaveData[] = {
-    { &flashState, sizeof(int) },
-    { &flashReadState, sizeof(int) },
-    { &flashSaveMemory[0], SIZE_FLASH512 },
-    { NULL, 0 }
-};
-
-static variable_desc flashSaveData2[] = {
-    { &flashState, sizeof(int) },
-    { &flashReadState, sizeof(int) },
-    { &flashSize, sizeof(int) },
-    { &flashSaveMemory[0], SIZE_FLASH1M },
-    { NULL, 0 }
-};
-
-void flashSaveGame(gzFile gzFile)
-{
-    utilWriteData(gzFile, flashSaveData3);
-}
-
-void flashReadGame(gzFile gzFile, int version)
-{
-    if (version < SAVE_GAME_VERSION_5)
-        utilReadData(gzFile, flashSaveData);
-    else if (version < SAVE_GAME_VERSION_7) {
-        utilReadData(gzFile, flashSaveData2);
-        flashBank = 0;
-        flashSetSize(flashSize);
-    } else {
-        utilReadData(gzFile, flashSaveData3);
-    }
-}
-
-void flashReadGameSkip(gzFile gzFile, int version)
-{
-    // skip the flash data in a save game
-    if (version < SAVE_GAME_VERSION_5)
-        utilReadDataSkip(gzFile, flashSaveData);
-    else if (version < SAVE_GAME_VERSION_7) {
-        utilReadDataSkip(gzFile, flashSaveData2);
-    } else {
-        utilReadDataSkip(gzFile, flashSaveData3);
-    }
-}
-#endif

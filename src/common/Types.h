@@ -18,13 +18,8 @@
 #ifndef __VBA_TYPES_H__
 #define __VBA_TYPES_H__
 
-#ifdef __LIBRETRO__
 #include <stdint.h>
 #include <string.h>
-#else
-#include <zlib.h>
-#include "cstdint.h"
-#endif
 
 typedef uint16_t pixFormat;
 

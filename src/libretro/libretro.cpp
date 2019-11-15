@@ -77,6 +77,7 @@ int systemFrameSkip = 0;
 int systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
 int systemSpeed = 0;
 int emulating = 0;
+int romSize = 0;
 
 void (*dbgOutput)(const char* s, uint32_t addr);
 void (*dbgSignal)(int sig, int number);
@@ -768,8 +769,6 @@ typedef struct {
 static const ini_t gbaover[512] = {
     #include "gba-over.inc"
 };
-
-static int romSize = 0;
 
 static void load_image_preferences(void)
 {

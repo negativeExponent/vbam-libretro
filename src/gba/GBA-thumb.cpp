@@ -20,14 +20,7 @@
 #include "Globals.h"
 #include "Sound.h"
 #include "Sram.h"
-#include "agbprint.h"
 #include "bios.h"
-#include "elf.h"
-#include "remote.h"
-
-#ifdef PROFILING
-#include "prof/prof.h"
-#endif
 
 #ifdef _MSC_VER
 #define snprintf _snprintf
@@ -2113,7 +2106,7 @@ int thumbExecute()
 
         cpuTotalTicks += clockTicks;
 
-    } while (cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks && !debugger);
+    } while (cpuTotalTicks < cpuNextEvent && !armState && !holdState && !SWITicks);
 
     return 1;
 }

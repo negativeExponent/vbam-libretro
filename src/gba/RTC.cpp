@@ -306,7 +306,6 @@ void rtcReset()
     SetGBATime();
 }
 
-#ifdef __LIBRETRO__
 void rtcSaveGame(uint8_t*& data)
 {
     utilWriteMem(data, &rtcClockData, sizeof(rtcClockData));
@@ -316,14 +315,3 @@ void rtcReadGame(const uint8_t*& data)
 {
     utilReadMem(&rtcClockData, data, sizeof(rtcClockData));
 }
-#else
-void rtcSaveGame(gzFile gzFile)
-{
-    utilGzWrite(gzFile, &rtcClockData, sizeof(rtcClockData));
-}
-
-void rtcReadGame(gzFile gzFile)
-{
-    utilGzRead(gzFile, &rtcClockData, sizeof(rtcClockData));
-}
-#endif

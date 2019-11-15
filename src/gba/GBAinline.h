@@ -3,12 +3,9 @@
 
 #include "../System.h"
 #include "../common/Port.h"
-#include "GBALink.h"
 #include "GBAcpu.h"
 #include "RTC.h"
 #include "Sound.h"
-#include "agbprint.h"
-#include "remote.h"
 
 extern bool stopState;
 extern bool holdState;

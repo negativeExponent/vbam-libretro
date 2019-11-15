@@ -35,7 +35,6 @@ SOURCES_CXX += \
 	$(CORE_DIR)/gba/Mode1.cpp \
 	$(CORE_DIR)/gba/CheatSearch.cpp \
 	$(CORE_DIR)/gba/Globals.cpp \
-	$(CORE_DIR)/gba/agbprint.cpp \
 	$(CORE_DIR)/gba/Mode4.cpp \
 	$(CORE_DIR)/gba/Mode3.cpp \
 	$(CORE_DIR)/gba/Mode5.cpp \

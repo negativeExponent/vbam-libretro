@@ -1,6 +1,8 @@
 #include <string.h>
-#include "GBAinline.h"
+
 #include "GBAGfx.h"
+#include "GBALink.h"
+#include "GBAinline.h"
 
 extern int layerEnableDelay;
 extern bool windowOn;

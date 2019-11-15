@@ -25,7 +25,7 @@ static inline uint32_t swap32(uint32_t v)
         return (v << 24) | ((v << 8) & 0xff0000) | ((v >> 8) & 0xff00) | (v >> 24);
 }
 
-#ifdef WORDS_BIGENDIAN
+#ifdef MSB_FIRST
 #if defined(__GNUC__) && defined(__ppc__)
 
 #define READ16LE(base)                                                                             \

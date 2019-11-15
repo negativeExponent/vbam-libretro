@@ -19,6 +19,25 @@ const uint64_t TICKS_PER_SECOND = 16777216;
 #define SAVE_GAME_VERSION_10 10
 #define SAVE_GAME_VERSION SAVE_GAME_VERSION_10
 
+// register definitions
+#define COMM_SIODATA32_L 0x120 // Lower 16bit on Normal mode
+#define COMM_SIODATA32_H 0x122 // Higher 16bit on Normal mode
+#define COMM_SIOCNT 0x128
+#define COMM_SIODATA8 0x12a // 8bit on Normal/UART mode, (up to 4x8bit with FIFO)
+#define COMM_SIOMLT_SEND 0x12a // SIOMLT_SEND (16bit R/W) on MultiPlayer mode (local outgoing)
+#define COMM_SIOMULTI0 0x120 // SIOMULTI0 (16bit) on MultiPlayer mode (Parent/Master)
+#define COMM_SIOMULTI1 0x122 // SIOMULTI1 (16bit) on MultiPlayer mode (Child1/Slave1)
+#define COMM_SIOMULTI2 0x124 // SIOMULTI2 (16bit) on MultiPlayer mode (Child2/Slave2)
+#define COMM_SIOMULTI3 0x126 // SIOMULTI3 (16bit) on MultiPlayer mode (Child3/Slave3)
+#define COMM_RCNT 0x134 // SIO Mode (4bit data) on GeneralPurpose mode
+#define COMM_IR 0x136 // Infrared Register (16bit) 1bit data at a time(LED On/Off)?
+#define COMM_JOYCNT 0x140
+#define COMM_JOY_RECV_L 0x150 // Send/Receive 8bit Lower first then 8bit Higher
+#define COMM_JOY_RECV_H 0x152
+#define COMM_JOY_TRANS_L 0x154 // Send/Receive 8bit Lower first then 8bit Higher
+#define COMM_JOY_TRANS_H 0x156
+#define COMM_JOYSTAT 0x158 // Send/Receive 8bit lower only
+
 enum gba_geometry
 {
     GBA_WIDTH  = 240,
@@ -54,11 +73,7 @@ enum gba_memory_size
     SIZE_VRAM  = 0x0020000,
     SIZE_OAM   = 0x0000400,
     SIZE_IOMEM = 0x0000400,
-#ifndef __LIBRETRO__
-    SIZE_PIX = (4 * 241 * 162)
-#else
-    SIZE_PIX = (4 * 240 * 160)
-#endif
+    SIZE_PIX = (4 * GBA_WIDTH * GBA_HEIGHT)
 };
 
 typedef struct {
@@ -74,7 +89,7 @@ typedef struct {
 
 typedef union {
     struct {
-#ifdef WORDS_BIGENDIAN
+#ifdef MSB_FIRST
         uint8_t B3;
         uint8_t B2;
         uint8_t B1;
@@ -87,7 +102,7 @@ typedef union {
 #endif
     } B;
     struct {
-#ifdef WORDS_BIGENDIAN
+#ifdef MSB_FIRST
         uint16_t W1;
         uint16_t W0;
 #else
@@ -95,7 +110,7 @@ typedef union {
         uint16_t W1;
 #endif
     } W;
-#ifdef WORDS_BIGENDIAN
+#ifdef MSB_FIRST
     volatile uint32_t I;
 #else
     uint32_t I;
@@ -124,11 +139,8 @@ struct gba_dma_t
 extern gba_dma_t dma[4];
 extern gba_timers_t timers;
 extern memoryMap map[256];
-
 extern uint8_t biosProtected[4];
-
 extern void (*cpuSaveGameFunc)(uint32_t, uint8_t);
-
 extern bool cpuSramEnabled;
 extern bool cpuFlashEnabled;
 extern bool cpuEEPROMEnabled;
@@ -146,44 +158,21 @@ extern char oldbuffer[10];
 extern bool debugger;
 #endif
 
-extern bool CPUReadGSASnapshot(const char*);
-extern bool CPUReadGSASPSnapshot(const char*);
-extern bool CPUWriteGSASnapshot(const char*, const char*, const char*, const char*);
-extern bool CPUWriteBatteryFile(const char*);
-extern bool CPUReadBatteryFile(const char*);
-extern bool CPUExportEepromFile(const char*);
-extern bool CPUImportEepromFile(const char*);
-extern bool CPUWritePNGFile(const char*);
-extern bool CPUWriteBMPFile(const char*);
-extern void CPUCleanUp();
-extern void CPUUpdateRender();
-extern void CPUUpdateRenderBuffers(bool);
-extern bool CPUReadMemState(char*, int);
-extern bool CPUWriteMemState(char*, int);
-#ifdef __LIBRETRO__
-extern bool CPUReadState(const uint8_t*, unsigned);
-extern unsigned int CPUWriteState(uint8_t* data, unsigned int size);
-#else
-extern bool CPUReadState(const char*);
-extern bool CPUWriteState(const char*);
-#endif
-extern int CPULoadRom(const char*);
-extern int CPULoadRomData(const char* data, int size);
-extern void doMirroring(bool);
-extern void CPUUpdateRegister(uint32_t, uint16_t);
-extern void applyTimer();
-extern void CPUInit(const char*, bool);
+void CPUCleanUp();
+void CPUUpdateRender();
+void CPUUpdateRenderBuffers(bool);
+bool CPUReadState(const uint8_t*, unsigned);
+unsigned int CPUWriteState(uint8_t* data, unsigned int size);
+int CPULoadRom(const char*);
+int CPULoadRomData(const char* data, int size);
+void doMirroring(bool);
+void CPUUpdateRegister(uint32_t, uint16_t);
+void applyTimer();
+void CPUInit(const char*, bool);
 void SetSaveType(int st);
-extern void CPUReset();
-extern void CPULoop(int);
-extern void CPUCheckDMA(int, int);
-extern bool CPUIsGBAImage(const char*);
-extern bool CPUIsZipFile(const char*);
-#ifdef PROFILING
-#include "prof/prof.h"
-extern void cpuProfil(profile_segment* seg);
-extern void cpuEnableProfiling(int hz);
-#endif
+void CPUReset();
+void CPULoop(int);
+void CPUCheckDMA(int, int);
 
 const char* GetLoadDotCodeFile();
 const char* GetSaveDotCodeFile();

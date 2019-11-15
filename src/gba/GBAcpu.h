@@ -55,7 +55,6 @@ extern uint8_t memoryWait32[16];
 extern uint8_t memoryWaitSeq[16];
 extern uint8_t memoryWaitSeq32[16];
 extern uint8_t cpuBitsSet[256];
-extern uint8_t cpuLowestBitSet[256];
 extern void CPUUpdateCPSR();
 extern void CPUSwitchMode(int mode, bool saveState, bool breakLoop);
 extern void CPUUpdateFlags(bool breakLoop);
