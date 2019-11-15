@@ -23,7 +23,7 @@ void mode3RenderLine(pixFormat* lineMix)
             top = 0x04;
         }
 
-        if ((uint8_t)(lineOBJ[x] >> 24) < (uint8_t)(color >> 24)) {
+        if ((lineOBJ[x] & 0xFF000000) < (color & 0xFF000000)) {
             color = lineOBJ[x];
             top = 0x10;
         }
@@ -81,7 +81,7 @@ void mode3RenderLineNoWindow(pixFormat* lineMix)
             top = 0x04;
         }
 
-        if ((uint8_t)(lineOBJ[x] >> 24) < (uint8_t)(color >> 24)) {
+        if ((lineOBJ[x] & 0xFF000000) < (color & 0xFF000000)) {
             color = lineOBJ[x];
             top = 0x10;
         }
@@ -102,7 +102,7 @@ void mode3RenderLineNoWindow(pixFormat* lineMix)
                         }
                     }
 
-                    if ((uint8_t)(lineOBJ[x] >> 24) < (uint8_t)(back >> 24)) {
+                    if ((lineOBJ[x] & 0xFF000000) < (back & 0xFF000000)) {
                         if (top != 0x10) {
                             back = lineOBJ[x];
                             top2 = 0x10;
@@ -220,7 +220,7 @@ void mode3RenderLineAll(pixFormat* lineMix)
             top = 0x04;
         }
 
-        if ((mask & 16) && ((uint8_t)(lineOBJ[x] >> 24) < (uint8_t)(color >> 24))) {
+        if ((mask & 16) && ((lineOBJ[x] & 0xFF000000) < (color & 0xFF000000))) {
             color = lineOBJ[x];
             top = 0x10;
         }
@@ -267,7 +267,7 @@ void mode3RenderLineAll(pixFormat* lineMix)
                         }
                     }
 
-                    if ((mask & 16) && (uint8_t)(lineOBJ[x] >> 24) < (uint8_t)(back >> 24)) {
+                    if ((mask & 16) && (lineOBJ[x] & 0xFF000000) < (back & 0xFF000000)) {
                         if (top != 0x10) {
                             back = lineOBJ[x];
                             top2 = 0x10;
