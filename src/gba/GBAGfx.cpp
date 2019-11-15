@@ -59,55 +59,6 @@ static int textModeSizeMapX[4] = { 256, 512, 256, 512 };
 static int textModeSizeMapY[4] = { 256, 256, 512, 512 };
 
 #ifdef TILED_RENDERING
-#ifdef _MSC_VER
-union uint8_th {
-   __pragma(pack(push, 1));
-   struct
-   {
-#ifdef MSB_FIRST
-      /* 4*/ unsigned char hi : 4;
-      /* 0*/ unsigned char lo : 4;
-#else
-      /* 0*/ unsigned char lo : 4;
-      /* 4*/ unsigned char hi : 4;
-#endif
-   } __pragma(pack(pop));
-   uint8_t val;
-};
-#else // !_MSC_VER
-union uint8_th {
-   struct
-   {
-#ifdef MSB_FIRST
-      /* 4*/ unsigned char hi : 4;
-      /* 0*/ unsigned char lo : 4;
-#else
-      /* 0*/ unsigned char lo : 4;
-      /* 4*/ unsigned char hi : 4;
-#endif
-   } __attribute__((packed));
-   uint8_t val;
-};
-#endif
-
-union TileEntry {
-   struct
-   {
-#ifdef MSB_FIRST
-      /*14*/ unsigned palette : 4;
-      /*13*/ unsigned vFlip : 1;
-      /*12*/ unsigned hFlip : 1;
-      /* 0*/ unsigned tileNum : 10;
-#else
-      /* 0*/ unsigned tileNum : 10;
-      /*12*/ unsigned hFlip : 1;
-      /*13*/ unsigned vFlip : 1;
-      /*14*/ unsigned palette : 4;
-#endif
-   };
-   uint16_t val;
-};
-
 struct TileLine
 {
    uint32_t pixels[8];
@@ -120,19 +71,23 @@ static inline void gfxDrawPixel(uint32_t* dest, const uint8_t color, const uint1
    *dest = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
 }
 
+#define BIT(x) (1 << (x))
+#define TILENUM(x) ((x) & 0x03FF)
+#define TILEPALETTE(x) (((x) >> 12) & 0x000F)
+#define HFLIP BIT(10)
+#define VFLIP BIT(11)
+
 inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
 {
-   TileEntry tile;
-   tile.val = READ16LE(screenSource);
-
+   uint16_t tile = READ16LE(screenSource);
    int tileY = yyy & 7;
-   if (tile.vFlip)
+   if (tile & VFLIP)
       tileY = 7 - tileY;
    TileLine tileLine;
 
-   const uint8_t* tileBase = &charBase[tile.tileNum * 64 + tileY * 8];
+   const uint8_t* tileBase = &charBase[TILENUM(tile) * 64 + tileY * 8];
 
-   if (!tile.hFlip)
+   if (!(tile & HFLIP))
    {
       gfxDrawPixel(&tileLine.pixels[0], tileBase[0], palette, prio);
       gfxDrawPixel(&tileLine.pixels[1], tileBase[1], palette, prio);
@@ -160,38 +115,36 @@ inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, c
 
 inline const TileLine gfxReadTilePal(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
 {
-   TileEntry tile;
-   tile.val = READ16LE(screenSource);
-
+   uint16_t tile = READ16LE(screenSource);
    int tileY = yyy & 7;
-   if (tile.vFlip)
+   if (tile & VFLIP)
       tileY = 7 - tileY;
-   palette += tile.palette * 16;
+   palette += TILEPALETTE(tile) * 16;
    TileLine tileLine;
 
-   const uint8_th* tileBase = (uint8_th*)&charBase[tile.tileNum * 32 + tileY * 4];
+   const uint8_t* tileBase = (uint8_t*)&charBase[TILENUM(tile) * 32 + tileY * 4];
 
-   if (!tile.hFlip)
+   if (!(tile & HFLIP))
    {
-      gfxDrawPixel(&tileLine.pixels[0], tileBase[0].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[1], tileBase[0].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[2], tileBase[1].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[3], tileBase[1].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[4], tileBase[2].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[5], tileBase[2].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[6], tileBase[3].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[7], tileBase[3].hi, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[0], (tileBase[0] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[1], (tileBase[0] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[2], (tileBase[1] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[3], (tileBase[1] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[4], (tileBase[2] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[5], (tileBase[2] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[6], (tileBase[3] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[7], (tileBase[3] >> 4) & 0x0F, palette, prio);
    }
    else
    {
-      gfxDrawPixel(&tileLine.pixels[0], tileBase[3].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[1], tileBase[3].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[2], tileBase[2].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[3], tileBase[2].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[4], tileBase[1].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[5], tileBase[1].lo, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[6], tileBase[0].hi, palette, prio);
-      gfxDrawPixel(&tileLine.pixels[7], tileBase[0].lo, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[0], (tileBase[3] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[1], (tileBase[3] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[2], (tileBase[2] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[3], (tileBase[2] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[4], (tileBase[1] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[5], (tileBase[1] >> 0) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[6], (tileBase[0] >> 4) & 0x0F, palette, prio);
+      gfxDrawPixel(&tileLine.pixels[7], (tileBase[0] >> 0) & 0x0F, palette, prio);
    }
 
    return tileLine;
