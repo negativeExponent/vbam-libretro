@@ -7,17 +7,14 @@ int coeff[32] = {
    16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16
 };
 
-uint32_t line0[240];
-uint32_t line1[240];
-uint32_t line2[240];
-uint32_t line3[240];
+uint32_t lineBG[4][240];
 uint32_t lineOBJ[240];
 uint32_t lineOBJWin[240];
 bool gfxInWin0[240];
 bool gfxInWin1[240];
 int lineOBJpixleft[128];
 
-lcd_background_t lcd_bg[4];
+static lcd_background_t lcd_bg[4];
 
 static inline void gfxClearArray(uint32_t* array)
 {
@@ -161,23 +158,24 @@ static inline void gfxDrawTileClipped(const TileLine& tileLine, uint32_t* line, 
 }
 
 template <TileReader readTile>
-static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
+static void gfxDrawTextScreen(int layer)
 {
-   uint8_t* charBase = &vram[((bg->control >> 2) & 0x03) * 0x4000];
-   uint16_t* screenBase = (uint16_t*)&vram[((bg->control >> 8) & 0x1f) * 0x800];
-   uint32_t prio = ((bg->control & 3) << 25) + 0x1000000;
+   uint16_t *palette = (uint16_t*)paletteRAM;
+   uint8_t* charBase = &vram[((lcd_bg[layer].control >> 2) & 0x03) * 0x4000];
+   uint16_t* screenBase = (uint16_t*)&vram[((lcd_bg[layer].control >> 8) & 0x1f) * 0x800];
+   uint32_t prio = ((lcd_bg[layer].control & 3) << 25) + 0x1000000;
 
-   int screenSize = (bg->control >> 14) & 3;
+   int screenSize = (lcd_bg[layer].control >> 14) & 3;
    int sizeX = textModeSizeMapX[screenSize];
    int sizeY = textModeSizeMapY[screenSize];
 
    int maskX = sizeX - 1;
    int maskY = sizeY - 1;
 
-   bool mosaicOn = (bg->control & 0x40) ? true : false;
+   bool mosaicOn = (lcd_bg[layer].control & 0x40) ? true : false;
 
-   int xxx = bg->h_offset & maskX;
-   int yyy = (bg->v_offset + VCOUNT) & maskY;
+   int xxx = lcd_bg[layer].h_offset & maskX;
+   int yyy = (lcd_bg[layer].v_offset + VCOUNT) & maskY;
    int mosaicX = (MOSAIC & 0x000F) + 1;
    int mosaicY = ((MOSAIC & 0x00F0) >> 4) + 1;
 
@@ -186,7 +184,7 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
       if ((VCOUNT % mosaicY) != 0)
       {
          mosaicY = VCOUNT - (VCOUNT % mosaicY);
-         yyy = (bg->v_offset + mosaicY) & maskY;
+         yyy = (lcd_bg[layer].v_offset + mosaicY) & maskY;
       }
    }
 
@@ -207,7 +205,7 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
    // First tile, if clipped
    if (firstTileX)
    {
-      gfxDrawTileClipped(readTile(screenSource, yyy, charBase, palette, prio), &line[x], firstTileX, 8 - firstTileX);
+      gfxDrawTileClipped(readTile(screenSource, yyy, charBase, palette, prio), &lineBG[layer][x], firstTileX, 8 - firstTileX);
       ++screenSource;
       x += 8 - firstTileX;
       xxx += 8 - firstTileX;
@@ -226,7 +224,7 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
    // Middle tiles, full
    while (x < 240 - firstTileX)
    {
-      gfxDrawTile(readTile(screenSource, yyy, charBase, palette, prio), &line[x]);
+      gfxDrawTile(readTile(screenSource, yyy, charBase, palette, prio), &lineBG[layer][x]);
       ++screenSource;
       xxx += 8;
       x += 8;
@@ -234,8 +232,9 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
       if (xxx == 256 && sizeX > 256)
       {
          screenSource = screenBase + 0x400 + yshift;
+         continue;
       }
-      else if (xxx >= sizeX)
+      if (xxx >= sizeX)
       {
          xxx = 0;
          screenSource = screenBase + yshift;
@@ -245,7 +244,7 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
    // Last tile, if clipped
    if (firstTileX)
    {
-      gfxDrawTileClipped(readTile(screenSource, yyy, charBase, palette, prio), &line[x], 0, firstTileX);
+      gfxDrawTileClipped(readTile(screenSource, yyy, charBase, palette, prio), &lineBG[layer][x], 0, firstTileX);
    }
 
    if (mosaicOn)
@@ -255,7 +254,7 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
          int m = 1;
          for (int i = 0; i < 239; ++i)
          {
-            line[i + 1] = line[i];
+            lineBG[layer][i + 1] = lineBG[layer][i];
             if (++m == mosaicX)
             {
                m = 1;
@@ -266,18 +265,24 @@ static void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t*
    }
 }
 
-void gfxDrawTextScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
+void gfxDrawTextScreen(int layer)
 {
-   if (bg->control & 0x80) // 1 pal / 256 col
-      gfxDrawTextScreen<gfxReadTile>(bg, palette, line);
+   if ((layerEnable & (0x0100 << layer)) == 0)
+      return;
+   if (lcd_bg[layer].control & 0x80) // 1 pal / 256 col
+      gfxDrawTextScreen<gfxReadTile>(layer);
    else // 16 pal / 16 col
-      gfxDrawTextScreen<gfxReadTilePal>(bg, palette, line);
+      gfxDrawTextScreen<gfxReadTilePal>(layer);
 }
-#endif // TILED_RENDERING
 
-#ifndef TILED_RENDERING
-void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, uint32_t* line)
+#else // TILED_RENDERING
+
+void gfxDrawTextScreen(int layer)
 {
+   if ((layerEnable & (0x0100 << layer)) == 0)
+      return;
+
+   uint32_t control = lcd_bg[layer].control;
    uint16_t* palette = (uint16_t*)paletteRAM;
    uint8_t* charBase = &vram[((control >> 2) & 0x03) * 0x4000];
    uint16_t* screenBase = (uint16_t*)&vram[((control >> 8) & 0x1f) * 0x800];
@@ -292,8 +297,8 @@ void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, u
 
    bool mosaicOn = (control & 0x40) ? true : false;
 
-   int xxx = h_offset & maskX;
-   int yyy = (v_offset + VCOUNT) & maskY;
+   int xxx = lcd_bg[layer].h_offset & maskX;
+   int yyy = (lcd_bg[layer].v_offset + VCOUNT) & maskY;
    int mosaicX = (MOSAIC & 0x000F) + 1;
    int mosaicY = ((MOSAIC & 0x00F0) >> 4) + 1;
 
@@ -302,7 +307,7 @@ void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, u
       if ((VCOUNT % mosaicY) != 0)
       {
          mosaicY = VCOUNT - (VCOUNT % mosaicY);
-         yyy = (v_offset + mosaicY) & maskY;
+         yyy = (lcd_bg[layer].v_offset + mosaicY) & maskY;
       }
    }
 
@@ -315,7 +320,7 @@ void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, u
    }
 
    int yshift = ((yyy >> 3) << 5);
-   if ((control)&0x80)
+   if (control & 0x80)
    {
       uint16_t* screenSource = screenBase + 0x400 * (xxx >> 8) + ((xxx & 255) >> 3) + yshift;
       for (int x = 0; x < 240; x++)
@@ -336,7 +341,7 @@ void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, u
 
          uint8_t color = charBase[tile * 64 + tileY * 8 + tileX];
 
-         line[x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
+         lineBG[layer][x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
 
          xxx++;
          if (xxx == 256)
@@ -387,7 +392,7 @@ void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, u
          }
 
          int pal = (data >> 8) & 0xF0;
-         line[x] = color ? (READ16LE(&palette[pal + color]) | prio) : 0x80000000;
+         lineBG[layer][x] = color ? (READ16LE(&palette[pal + color]) | prio) : 0x80000000;
 
          xxx++;
          if (xxx == 256)
@@ -414,7 +419,7 @@ void gfxDrawTextScreen(uint16_t control, uint16_t h_offset, uint16_t v_offset, u
          int m = 1;
          for (int i = 0; i < 239; i++)
          {
-            line[i + 1] = line[i];
+            lineBG[layer][i + 1] = lineBG[layer][i];
             m++;
             if (m == mosaicX)
             {
@@ -441,13 +446,17 @@ static inline T MIN(T a, T b)
 
 static int rotationModeSizeMap[4] = { 128, 256, 512, 1024 };
 
-void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
+void gfxDrawRotScreen(int layer)
 {
-   uint8_t* charBase = &vram[((bg->control >> 2) & 0x03) * 0x4000];
-   uint8_t* screenBase = (uint8_t*)&vram[((bg->control >> 8) & 0x1f) * 0x800];
-   int prio = ((bg->control & 3) << 25) + 0x1000000;
+   if ((layerEnable & (0x0100 << layer)) == 0)
+      return;
 
-   int screenSize = (bg->control >> 14) & 3;
+   uint16_t* palette = (uint16_t*)paletteRAM;
+   uint8_t* charBase = &vram[((lcd_bg[layer].control >> 2) & 0x03) * 0x4000];
+   uint8_t* screenBase = (uint8_t*)&vram[((lcd_bg[layer].control >> 8) & 0x1f) * 0x800];
+   int prio = ((lcd_bg[layer].control & 3) << 25) + 0x1000000;
+
+   int screenSize = (lcd_bg[layer].control >> 14) & 3;
    int sizeX = rotationModeSizeMap[screenSize];
    int sizeY = rotationModeSizeMap[screenSize];
 
@@ -456,21 +465,21 @@ void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
 
    int yshift = screenSize + 4;
 
-   int realX = bg->x_pos;
-   int realY = bg->y_pos;
+   int realX = lcd_bg[layer].x_pos;
+   int realY = lcd_bg[layer].y_pos;
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicY = ((MOSAIC & 0xF0) >> 4) + 1;
       int y = (VCOUNT % mosaicY);
-      realX -= y * bg->dmx;
-      realY -= y * bg->dmy;
+      realX -= y * lcd_bg[layer].dmx;
+      realY -= y * lcd_bg[layer].dmy;
    }
 
-   gfxClearArray(line);
-   if (bg->control & 0x2000) // Wrap around
+   gfxClearArray(lineBG[layer]);
+   if (lcd_bg[layer].control & 0x2000) // Wrap around
    {
-      if (bg->dx > 0 && bg->dy == 0) // Common subcase: no rotation or flipping
+      if (lcd_bg[layer].dx > 0 && lcd_bg[layer].dy == 0) // Common subcase: no rotation or flipping
       {
          int yyy = (realY >> 8) & maskY;
          int yyyshift = (yyy >> 3) << yshift;
@@ -488,9 +497,9 @@ void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
             uint8_t color = charBase[(tile << 6) | tileYshift | tileX];
 
             if (color)
-               line[x] = (READ16LE(&palette[color]) | prio);
+               lineBG[layer][x] = (READ16LE(&palette[color]) | prio);
 
-            realX += bg->dx;
+            realX += lcd_bg[layer].dx;
          }
       }
       else
@@ -508,24 +517,24 @@ void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
             uint8_t color = charBase[(tile << 6) + (tileY << 3) + tileX];
 
             if (color)
-               line[x] = (READ16LE(&palette[color]) | prio);
+               lineBG[layer][x] = (READ16LE(&palette[color]) | prio);
 
-            realX += bg->dx;
-            realY += bg->dy;
+            realX += lcd_bg[layer].dx;
+            realY += lcd_bg[layer].dy;
          }
       }
    }
    else // Culling
    {
-      if (bg->dx > 0 && bg->dy == 0) // Common subcase: no rotation or flipping
+      if (lcd_bg[layer].dx > 0 && lcd_bg[layer].dy == 0) // Common subcase: no rotation or flipping
       {
          int yyy = (realY >> 8);
 
          if (yyy < 0 || yyy >= sizeY)
             goto skipLine;
 
-         int x0 = MAX<int32_t>(0, (int32_t)(+(-realX + bg->dx - 1)) / bg->dx);
-         int x1 = MIN<int32_t>(240, (int32_t)((sizeX << 8) + (-realX + bg->dx - 1)) / bg->dx);
+         int x0 = MAX<int32_t>(0, (int32_t)(+(-realX + lcd_bg[layer].dx - 1)) / lcd_bg[layer].dx);
+         int x1 = MIN<int32_t>(240, (int32_t)((sizeX << 8) + (-realX + lcd_bg[layer].dx - 1)) / lcd_bg[layer].dx);
 
          if (x1 < 0)
             goto skipLine;
@@ -534,7 +543,7 @@ void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
          int tileY = yyy & 7;
          int tileYshift = (tileY << 3);
 
-         realX += bg->dx * x0;
+         realX += lcd_bg[layer].dx * x0;
 
          for (int x = x0; x < x1; ++x)
          {
@@ -546,9 +555,9 @@ void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
             uint8_t color = charBase[(tile << 6) | tileYshift | tileX];
 
             if (color)
-               line[x] = (READ16LE(&palette[color]) | prio);
+               lineBG[layer][x] = (READ16LE(&palette[color]) | prio);
 
-            realX += bg->dx;
+            realX += lcd_bg[layer].dx;
          }
       }
       else
@@ -558,31 +567,27 @@ void gfxDrawRotScreen(lcd_background_t* bg, uint16_t* palette, uint32_t* line)
             int xxx = (realX >> 8);
             int yyy = (realY >> 8);
 
+            realX += lcd_bg[layer].dx;
+            realY += lcd_bg[layer].dy;
+
             if (xxx < 0 || yyy < 0 || xxx >= sizeX || yyy >= sizeY)
-            {
-               //line[x] = 0x80000000;
-            }
-            else
-            {
-               int tile = screenBase[(xxx >> 3) + ((yyy >> 3) << yshift)];
+               continue;
+            int tile = screenBase[(xxx >> 3) + ((yyy >> 3) << yshift)];
 
-               int tileX = (xxx & 7);
-               int tileY = yyy & 7;
+            int tileX = (xxx & 7);
+            int tileY = yyy & 7;
 
-               uint8_t color = charBase[(tile << 6) + (tileY << 3) + tileX];
+            uint8_t color = charBase[(tile << 6) + (tileY << 3) + tileX];
 
-               if (color)
-                  line[x] = (READ16LE(&palette[color]) | prio);
-            }
-            realX += bg->dx;
-            realY += bg->dy;
+            if (color)
+               lineBG[layer][x] = (READ16LE(&palette[color]) | prio);
          }
       }
    }
 
 skipLine:
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicX = (MOSAIC & 0xF) + 1;
       if (mosaicX > 1)
@@ -590,7 +595,7 @@ skipLine:
          int m = 1;
          for (int i = 0; i < 239; ++i)
          {
-            line[i + 1] = line[i];
+            lineBG[layer][i + 1] = lineBG[layer][i];
             if (++m == mosaicX)
             {
                m = 1;
@@ -601,45 +606,45 @@ skipLine:
    }
 }
 
-void gfxDrawRotScreen16Bit(lcd_background_t* bg)
+void gfxDrawRotScreen16Bit(int layer)
 {
+   if ((layerEnable & (0x0100 << layer)) == 0)
+      return;
+
    uint16_t* screenBase = (uint16_t*)&vram[0];
-   int prio = ((bg->control & 3) << 25) + 0x1000000;
+   int prio = ((lcd_bg[layer].control & 3) << 25) + 0x1000000;
    int sizeX = 240;
    int sizeY = 160;
 
-   int realX = bg->x_pos;
-   int realY = bg->y_pos;
+   int realX = lcd_bg[layer].x_pos;
+   int realY = lcd_bg[layer].y_pos;
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicY = ((MOSAIC & 0xF0) >> 4) + 1;
       int y = (VCOUNT % mosaicY);
-      realX -= y * bg->dmx;
-      realY -= y * bg->dmy;
+      realX -= y * lcd_bg[layer].dmx;
+      realY -= y * lcd_bg[layer].dmy;
    }
-
-   int xxx = (realX >> 8);
-   int yyy = (realY >> 8);
 
    for (int x = 0; x < 240; ++x)
    {
+      int xxx = (realX >> 8);
+      int yyy = (realY >> 8);
+
+      realX += lcd_bg[layer].dx;
+      realY += lcd_bg[layer].dy;
+
       if (xxx < 0 || yyy < 0 || xxx >= sizeX || yyy >= sizeY)
       {
-         line2[x] = 0x80000000;
+         lineBG[layer][x] = 0x80000000;
+         continue;
       }
-      else
-      {
-         line2[x] = (READ16LE(&screenBase[yyy * sizeX + xxx]) | prio);
-      }
-      realX += bg->dx;
-      realY += bg->dy;
 
-      xxx = (realX >> 8);
-      yyy = (realY >> 8);
+      lineBG[layer][x] = (READ16LE(&screenBase[yyy * sizeX + xxx]) | prio);
    }
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicX = (MOSAIC & 0xF) + 1;
       if (mosaicX > 1)
@@ -647,7 +652,7 @@ void gfxDrawRotScreen16Bit(lcd_background_t* bg)
          int m = 1;
          for (int i = 0; i < 239; ++i)
          {
-            line2[i + 1] = line2[i];
+            lineBG[layer][i + 1] = lineBG[layer][i];
             if (++m == mosaicX)
             {
                m = 1;
@@ -658,48 +663,47 @@ void gfxDrawRotScreen16Bit(lcd_background_t* bg)
    }
 }
 
-void gfxDrawRotScreen256(lcd_background_t* bg)
+void gfxDrawRotScreen256(int layer)
 {
+   if ((layerEnable & (0x0100 << layer)) == 0)
+      return;
+
    uint16_t* palette = (uint16_t*)paletteRAM;
    uint8_t* screenBase = (DISPCNT & 0x0010) ? &vram[0xA000] : &vram[0x0000];
-   int prio = ((bg->control & 3) << 25) + 0x1000000;
+   int prio = ((lcd_bg[layer].control & 3) << 25) + 0x1000000;
    int sizeX = 240;
    int sizeY = 160;
 
-   int realX = bg->x_pos;
-   int realY = bg->y_pos;
+   int realX = lcd_bg[layer].x_pos;
+   int realY = lcd_bg[layer].y_pos;
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicY = ((MOSAIC & 0xF0) >> 4) + 1;
       int y = VCOUNT - (VCOUNT % mosaicY);
-      realX = bg->x_ref + y * bg->dmx;
-      realY = bg->y_ref + y * bg->dmy;
+      realX = lcd_bg[layer].x_ref + y * lcd_bg[layer].dmx;
+      realY = lcd_bg[layer].y_ref + y * lcd_bg[layer].dmy;
    }
-
-   int xxx = (realX >> 8);
-   int yyy = (realY >> 8);
 
    for (int x = 0; x < 240; ++x)
    {
+      int xxx = (realX >> 8);
+      int yyy = (realY >> 8);
+
+      realX += lcd_bg[layer].dx;
+      realY += lcd_bg[layer].dy;
+
       if (xxx < 0 || yyy < 0 || xxx >= sizeX || yyy >= sizeY)
       {
-         line2[x] = 0x80000000;
+         lineBG[layer][x] = 0x80000000;
+         continue;
       }
-      else
-      {
-         uint8_t color = screenBase[yyy * 240 + xxx];
 
-         line2[x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
-      }
-      realX += bg->dx;
-      realY += bg->dy;
-
-      xxx = (realX >> 8);
-      yyy = (realY >> 8);
+      uint8_t color = screenBase[yyy * 240 + xxx];
+      lineBG[layer][x] = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
    }
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicX = (MOSAIC & 0xF) + 1;
       if (mosaicX > 1)
@@ -707,7 +711,7 @@ void gfxDrawRotScreen256(lcd_background_t* bg)
          int m = 1;
          for (int i = 0; i < 239; ++i)
          {
-            line2[i + 1] = line2[i];
+            lineBG[layer][i + 1] = lineBG[layer][i];
             if (++m == mosaicX)
             {
                m = 1;
@@ -718,45 +722,45 @@ void gfxDrawRotScreen256(lcd_background_t* bg)
    }
 }
 
-void gfxDrawRotScreen16Bit160(lcd_background_t* bg)
+void gfxDrawRotScreen16Bit160(int layer)
 {
+   if ((layerEnable & (0x0100 << layer)) == 0)
+      return;
+
    uint16_t* screenBase = (DISPCNT & 0x0010) ? (uint16_t*)&vram[0xa000] : (uint16_t*)&vram[0];
-   int prio = ((bg->control & 3) << 25) + 0x1000000;
+   int prio = ((lcd_bg[layer].control & 3) << 25) + 0x1000000;
    int sizeX = 160;
    int sizeY = 128;
 
-   int realX = bg->x_pos;
-   int realY = bg->y_pos;
+   int realX = lcd_bg[layer].x_pos;
+   int realY = lcd_bg[layer].y_pos;
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicY = ((MOSAIC & 0xF0) >> 4) + 1;
       int y = VCOUNT - (VCOUNT % mosaicY);
-      realX = bg->x_ref + y * bg->dmx;
-      realY = bg->y_ref + y * bg->dmy;
+      realX = lcd_bg[layer].x_ref + y * lcd_bg[layer].dmx;
+      realY = lcd_bg[layer].y_ref + y * lcd_bg[layer].dmy;
    }
-
-   int xxx = (realX >> 8);
-   int yyy = (realY >> 8);
 
    for (int x = 0; x < 240; ++x)
    {
+      int xxx = (realX >> 8);
+      int yyy = (realY >> 8);
+
+      realX += lcd_bg[layer].dx;
+      realY += lcd_bg[layer].dy;
+
       if (xxx < 0 || yyy < 0 || xxx >= sizeX || yyy >= sizeY)
       {
-         line2[x] = 0x80000000;
+         lineBG[layer][x] = 0x80000000;
+         continue;
       }
-      else
-      {
-         line2[x] = (READ16LE(&screenBase[yyy * sizeX + xxx]) | prio);
-      }
-      realX += bg->dx;
-      realY += bg->dy;
 
-      xxx = (realX >> 8);
-      yyy = (realY >> 8);
+      lineBG[layer][x] = (READ16LE(&screenBase[yyy * sizeX + xxx]) | prio);
    }
 
-   if (bg->control & 0x40)
+   if (lcd_bg[layer].control & 0x40)
    {
       int mosaicX = (MOSAIC & 0xF) + 1;
       if (mosaicX > 1)
@@ -764,7 +768,7 @@ void gfxDrawRotScreen16Bit160(lcd_background_t* bg)
          int m = 1;
          for (int i = 0; i < 239; ++i)
          {
-            line2[i + 1] = line2[i];
+            lineBG[layer][i + 1] = lineBG[layer][i];
             if (++m == mosaicX)
             {
                m = 1;
@@ -1637,78 +1641,78 @@ void gfxDrawOBJWin()
    }
 }
 
-void LCDUpdateBGCNT(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGCNT(int layer, uint16_t value)
 {
-   bg->control = value;
+   lcd_bg[layer].control = value;
 }
 
-void LCDUpdateBGHOFS(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGHOFS(int layer, uint16_t value)
 {
-   bg->h_offset = value;
+   lcd_bg[layer].h_offset = value;
 }
 
-void LCDUpdateBGVOFS(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGVOFS(int layer, uint16_t value)
 {
-   bg->v_offset = value;
+   lcd_bg[layer].v_offset = value;
 }
 
-void LCDUpdateBGPA(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGPA(int layer, uint16_t value)
 {
-   bg->dx = value & 0x7FFF;
+   lcd_bg[layer].dx = value & 0x7FFF;
    if (value & 0x8000)
-      bg->dx |= 0xFFFF8000;
+      lcd_bg[layer].dx |= 0xFFFF8000;
 }
 
-void LCDUpdateBGPB(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGPB(int layer, uint16_t value)
 {
-   bg->dmx = value & 0x7FFF;
+   lcd_bg[layer].dmx = value & 0x7FFF;
    if (value & 0x8000)
-      bg->dmx |= 0xFFFF8000;
+      lcd_bg[layer].dmx |= 0xFFFF8000;
 }
 
-void LCDUpdateBGPC(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGPC(int layer, uint16_t value)
 {
-   bg->dy = value & 0x7FFF;
+   lcd_bg[layer].dy = value & 0x7FFF;
    if (value & 0x8000)
-      bg->dy |= 0xFFFF8000;
+      lcd_bg[layer].dy |= 0xFFFF8000;
 }
 
-void LCDUpdateBGPD(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGPD(int layer, uint16_t value)
 {
-   bg->dmy = value & 0x7FFF;
+   lcd_bg[layer].dmy = value & 0x7FFF;
    if (value & 0x8000)
-      bg->dmy |= 0xFFFF8000;
+      lcd_bg[layer].dmy |= 0xFFFF8000;
 }
 
-void LCDUpdateBGX_L(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGX_L(int layer, uint16_t value)
 {
-   bg->x_ref &= 0xFFFF0000;
-   bg->x_ref |= value;
-   bg->x_pos = bg->x_ref;
+   lcd_bg[layer].x_ref &= 0xFFFF0000;
+   lcd_bg[layer].x_ref |= value;
+   lcd_bg[layer].x_pos = lcd_bg[layer].x_ref;
 }
 
-void LCDUpdateBGX_H(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGX_H(int layer, uint16_t value)
 {
-   bg->x_ref &= 0x0000FFFF;
-   bg->x_ref |= (value << 16);
+   lcd_bg[layer].x_ref &= 0x0000FFFF;
+   lcd_bg[layer].x_ref |= (value << 16);
    if (value & 0x0800)
-      bg->x_ref |= 0xF8000000;
-   bg->x_pos = bg->x_ref;
+      lcd_bg[layer].x_ref |= 0xF8000000;
+   lcd_bg[layer].x_pos = lcd_bg[layer].x_ref;
 }
 
-void LCDUpdateBGY_L(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGY_L(int layer, uint16_t value)
 {
-   bg->y_ref &= 0xFFFF0000;
-   bg->y_ref |= value;
-   bg->y_pos = bg->y_ref;
+   lcd_bg[layer].y_ref &= 0xFFFF0000;
+   lcd_bg[layer].y_ref |= value;
+   lcd_bg[layer].y_pos = lcd_bg[layer].y_ref;
 }
-void LCDUpdateBGY_H(lcd_background_t* bg, uint16_t value)
+void LCDUpdateBGY_H(int layer, uint16_t value)
 {
-   bg->y_ref &= 0x0000FFFF;
-   bg->y_ref |= (value << 16);
+   lcd_bg[layer].y_ref &= 0x0000FFFF;
+   lcd_bg[layer].y_ref |= (value << 16);
    if (value & 0x0800)
-      bg->y_ref |= 0xF8000000;
-   bg->y_pos = bg->y_ref;
+      lcd_bg[layer].y_ref |= 0xF8000000;
+   lcd_bg[layer].y_pos = lcd_bg[layer].y_ref;
 }
 
 void LCDUpdateWindow0(void)
@@ -1743,76 +1747,141 @@ void LCDUpdateWindow1(void)
     }
 }
 
-void LCDUpdateBGRef(int BG)
+bool LCDPossibleInWindow(int which, uint16_t value, uint32_t vcount)
 {
-   uint32_t x_value = 0;
-   uint32_t y_value = 0;
-   switch (BG)
-   {
-   case 2:
-      x_value = READ32LE((uint32_t*)&ioMem[0x28]);
-      y_value = READ32LE((uint32_t*)&ioMem[0x2C]);
-      break;
+   if ((layerEnable & (0x2000 << which)) == 0)
+      return false;
 
-   case 3:
-      x_value = READ32LE((uint32_t*)&ioMem[0x38]);
-      y_value = READ32LE((uint32_t*)&ioMem[0x3C]);
-      break;
-   }
-
-   lcd_bg[BG].x_ref = x_value & 0x07FFFFFF;
-   if (x_value & 0x08000000)
-      lcd_bg[BG].x_ref |= 0xF8000000;
-   lcd_bg[BG].x_pos = lcd_bg[BG].x_ref;
-
-   lcd_bg[BG].y_ref = y_value & 0x07FFFFFF;
-   if (y_value & 0x08000000)
-      lcd_bg[BG].y_ref |= 0xF8000000;
-   lcd_bg[BG].y_pos = lcd_bg[BG].y_ref;
+   uint8_t v0 = value >> 8;
+   uint8_t v1 = value & 255;
+   bool inWindow = ((v0 == v1) && (v0 >= 0xe8));
+   if (v1 >= v0)
+      inWindow |= (vcount >= v0 && vcount < v1);
+   else
+      inWindow |= (vcount >= v0 || vcount < v1);
+   return inWindow;
 }
 
-void LCDResetBGParams()
+void LCDResetBGRegisters()
 {
    for (int i = 0; i < 4; ++i)
    {
-      lcd_background_t* bg = &lcd_bg[i];
-      bg->control = 0;
-      bg->h_offset = 0;
-      bg->v_offset = 0;
-      bg->dx = 0x100;
-      bg->dmx = 0;
-      bg->dy = 0;
-      bg->dmy = 0x100;
-      bg->x_ref = 0;
-      bg->y_ref = 0;
-      bg->x_pos = 0;
-      bg->y_pos = 0;
+      lcd_bg[i].control = 0;
+      lcd_bg[i].h_offset = 0;
+      lcd_bg[i].v_offset = 0;
+      lcd_bg[i].dx = 256;
+      lcd_bg[i].dmx = 0;
+      lcd_bg[i].dy = 0;
+      lcd_bg[i].dmy = 256;
+      lcd_bg[i].x_ref = 0;
+      lcd_bg[i].y_ref = 0;
+      lcd_bg[i].x_pos = 0;
+      lcd_bg[i].y_pos = 0;
    }
 }
 
-void LCDLoadStateBGParams()
+void LCDUpdateBGRegisters()
 {
-   LCDUpdateBGCNT(&lcd_bg[0], BG0CNT);
-   LCDUpdateBGCNT(&lcd_bg[1], BG1CNT);
-   LCDUpdateBGCNT(&lcd_bg[2], BG2CNT);
-   LCDUpdateBGCNT(&lcd_bg[3], BG3CNT);
-   LCDUpdateBGHOFS(&lcd_bg[0], BG0HOFS);
-   LCDUpdateBGVOFS(&lcd_bg[0], BG0VOFS);
-   LCDUpdateBGHOFS(&lcd_bg[1], BG1HOFS);
-   LCDUpdateBGVOFS(&lcd_bg[1], BG1VOFS);
-   LCDUpdateBGHOFS(&lcd_bg[2], BG2HOFS);
-   LCDUpdateBGVOFS(&lcd_bg[2], BG2VOFS);
-   LCDUpdateBGHOFS(&lcd_bg[3], BG3HOFS);
-   LCDUpdateBGVOFS(&lcd_bg[3], BG3VOFS);
+   LCDUpdateBGCNT(0, BG0CNT);
+   LCDUpdateBGCNT(1, BG1CNT);
+   LCDUpdateBGCNT(2, BG2CNT);
+   LCDUpdateBGCNT(3, BG3CNT);
+   LCDUpdateBGHOFS(0, BG0HOFS);
+   LCDUpdateBGVOFS(0, BG0VOFS);
+   LCDUpdateBGHOFS(1, BG1HOFS);
+   LCDUpdateBGVOFS(1, BG1VOFS);
+   LCDUpdateBGHOFS(2, BG2HOFS);
+   LCDUpdateBGVOFS(2, BG2VOFS);
+   LCDUpdateBGHOFS(3, BG3HOFS);
+   LCDUpdateBGVOFS(3, BG3VOFS);
 
-   LCDUpdateBGPA(&lcd_bg[2], BG2PA);
-   LCDUpdateBGPB(&lcd_bg[2], BG2PB);
-   LCDUpdateBGPC(&lcd_bg[2], BG2PC);
-   LCDUpdateBGPD(&lcd_bg[2], BG2PD);
-   LCDUpdateBGPA(&lcd_bg[3], BG3PA);
-   LCDUpdateBGPB(&lcd_bg[3], BG3PB);
-   LCDUpdateBGPC(&lcd_bg[3], BG3PC);
-   LCDUpdateBGPD(&lcd_bg[3], BG3PD);
-   LCDUpdateBGRef(2);
-   LCDUpdateBGRef(3);
+   LCDUpdateBGPA(2, BG2PA);
+   LCDUpdateBGPB(2, BG2PB);
+   LCDUpdateBGPC(2, BG2PC);
+   LCDUpdateBGPD(2, BG2PD);
+   LCDUpdateBGPA(3, BG3PA);
+   LCDUpdateBGPB(3, BG3PB);
+   LCDUpdateBGPC(3, BG3PC);
+   LCDUpdateBGPD(3, BG3PD);
+
+   LCDUpdateBGX_L(2, BG2X_L);
+   LCDUpdateBGX_H(2, BG2X_H);
+   LCDUpdateBGY_L(2, BG2Y_L);
+   LCDUpdateBGY_H(2, BG2Y_H);
+   LCDUpdateBGX_L(3, BG3X_L);
+   LCDUpdateBGX_H(3, BG3X_H);
+   LCDUpdateBGY_L(3, BG3Y_L);
+   LCDUpdateBGY_H(3, BG3Y_H);
+}
+
+#define RENDERLINE(MODE)                                              \
+   if (renderer_type == 0)      mode##MODE##RenderLine(dest);         \
+   else if (renderer_type == 1) mode##MODE##RenderLineNoWindow(dest); \
+   else if (renderer_type == 2) mode##MODE##RenderLineAll(dest);      \
+
+void gfxDrawScanline(pixFormat* dest, int renderer_mode, int renderer_type)
+{
+   if (DISPCNT & 0x80) // Force Blank
+   {
+      // draw white
+      forceBlankLine(dest);
+      return;
+   }
+   if (VCOUNT == 0)
+   {
+      lcd_bg[2].x_pos = lcd_bg[2].x_ref;
+      lcd_bg[2].y_pos = lcd_bg[2].y_ref;
+      lcd_bg[3].x_pos = lcd_bg[3].x_ref;
+      lcd_bg[3].y_pos = lcd_bg[3].y_ref;
+   }
+   // Draw scanline pix to screen buffer
+   gfxDrawSprites();
+   if (renderer_type == 2)
+      gfxDrawOBJWin();
+   switch (renderer_mode)
+   {
+      case 0:
+         gfxDrawTextScreen(0);
+         gfxDrawTextScreen(1);
+         gfxDrawTextScreen(2);
+         gfxDrawTextScreen(3);
+         RENDERLINE(0);
+         break;
+      case 1:
+         gfxDrawTextScreen(0);
+         gfxDrawTextScreen(1);
+         gfxDrawRotScreen(2);
+         RENDERLINE(1);
+         break;
+      case 2:
+         gfxDrawRotScreen(2);
+         gfxDrawRotScreen(3);
+         RENDERLINE(2);
+         break;
+      case 3:
+         gfxDrawRotScreen16Bit(2);
+         RENDERLINE(3);
+         break;
+      case 4:
+         gfxDrawRotScreen256(2);
+         RENDERLINE(4);
+         break;
+      case 5:
+         gfxDrawRotScreen16Bit160(2);
+         RENDERLINE(5);
+         break;
+   }
+   if ((DISPCNT & 7) != 0)
+   {
+      if (layerEnable & 0x0400)
+      {
+         lcd_bg[2].x_pos += lcd_bg[2].dmx;
+         lcd_bg[2].y_pos += lcd_bg[2].dmy;
+      }
+      if (layerEnable & 0x0800)
+      {
+         lcd_bg[3].x_pos += lcd_bg[3].dmx;
+         lcd_bg[3].y_pos += lcd_bg[3].dmy;
+      }
+   }
 }

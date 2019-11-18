@@ -28,11 +28,11 @@ struct lcd_renderer_t
 
 //#define SPRITE_DEBUG
 
-void gfxDrawTextScreen(lcd_background_t*, uint16_t*, uint32_t*);
-void gfxDrawRotScreen(lcd_background_t*, uint16_t*, uint32_t*);
-void gfxDrawRotScreen16Bit(lcd_background_t*);
-void gfxDrawRotScreen256(lcd_background_t*);
-void gfxDrawRotScreen16Bit160(lcd_background_t*);
+void gfxDrawTextScreen(int);
+void gfxDrawRotScreen(int);
+void gfxDrawRotScreen16Bit(int);
+void gfxDrawRotScreen256(int);
+void gfxDrawRotScreen16Bit160(int);
 void gfxDrawSprites();
 void gfxDrawOBJWin();
 static void gfxIncreaseBrightness(uint32_t* line, int coeff);
@@ -63,40 +63,37 @@ void mode5RenderLine(pixFormat*);
 void mode5RenderLineNoWindow(pixFormat*);
 void mode5RenderLineAll(pixFormat*);
 
-void forceBlankLine(pixFormat* lineMix);
+void forceBlankLine(pixFormat*);
+void gfxDrawScanline(pixFormat*, int, int);
 
 // LCD Background Registers
-void LCDUpdateBGCNT(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGHOFS(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGVOFS(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGPA(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGPB(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGPC(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGPD(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGX_L(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGX_H(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGY_L(lcd_background_t* bg, uint16_t value);
-void LCDUpdateBGY_H(lcd_background_t* bg, uint16_t value);
+void LCDUpdateBGCNT(int, uint16_t);
+void LCDUpdateBGHOFS(int, uint16_t);
+void LCDUpdateBGVOFS(int, uint16_t);
+void LCDUpdateBGPA(int, uint16_t);
+void LCDUpdateBGPB(int, uint16_t);
+void LCDUpdateBGPC(int, uint16_t);
+void LCDUpdateBGPD(int, uint16_t);
+void LCDUpdateBGX_L(int, uint16_t);
+void LCDUpdateBGX_H(int, uint16_t);
+void LCDUpdateBGY_L(int, uint16_t);
+void LCDUpdateBGY_H(int, uint16_t);
 void LCDUpdateWindow0();
 void LCDUpdateWindow1();
-void LCDUpdateBGRef(int);
-void LCDResetBGParams();
+bool LCDPossibleInWindow(int, uint16_t, uint32_t);
+void LCDResetBGRegisters();
 
 // Used for savestate compatibility.
-// Reloads lcd io BG regs to lcd background registers after loading states
-void LCDLoadStateBGParams();
+// Reloads lcd BG registers to lcd background registers struct after loading states
+void LCDUpdateBGRegisters();
 
 extern int coeff[32];
-extern uint32_t line0[240];
-extern uint32_t line1[240];
-extern uint32_t line2[240];
-extern uint32_t line3[240];
+extern uint32_t lineBG[4][240];
 extern uint32_t lineOBJ[240];
 extern uint32_t lineOBJWin[240];
 extern bool gfxInWin0[240];
 extern bool gfxInWin1[240];
 extern int lineOBJpixleft[128];
-extern lcd_background_t lcd_bg[4];
 extern uint16_t systemColorMap16[0x10000];
 
 #define MAKECOLOR(color) systemColorMap16[(color) & 0xFFFF]

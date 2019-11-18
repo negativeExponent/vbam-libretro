@@ -1,20 +1,8 @@
-#include "GBA.h"
 #include "GBAGfx.h"
-#include "Globals.h"
 
 void mode2RenderLine(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
-
-    if (layerEnable & 0x0400) {
-        gfxDrawRotScreen(&lcd_bg[2], palette, line2);
-    }
-
-    if (layerEnable & 0x0800) {
-        gfxDrawRotScreen(&lcd_bg[3], palette, line3);
-    }
-
-    gfxDrawSprites();
 
     uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
@@ -22,13 +10,13 @@ void mode2RenderLine(pixFormat* lineMix)
         uint32_t color = backdrop;
         uint8_t top = 0x20;
 
-        if ((line2[x] & 0xFF000000) < (color & 0xFF000000)) {
-            color = line2[x];
+        if ((lineBG[2][x] & 0xFF000000) < (color & 0xFF000000)) {
+            color = lineBG[2][x];
             top = 0x04;
         }
 
-        if ((line3[x] & 0xFF000000) < (color & 0xFF000000)) {
-            color = line3[x];
+        if ((lineBG[3][x] & 0xFF000000) < (color & 0xFF000000)) {
+            color = lineBG[3][x];
             top = 0x08;
         }
 
@@ -42,13 +30,13 @@ void mode2RenderLine(pixFormat* lineMix)
             uint32_t back = backdrop;
             uint8_t top2 = 0x20;
 
-            if ((line2[x] & 0xFF000000) < (back & 0xFF000000)) {
-                back = line2[x];
+            if ((lineBG[2][x] & 0xFF000000) < (back & 0xFF000000)) {
+                back = lineBG[2][x];
                 top2 = 0x04;
             }
 
-            if ((line3[x] & 0xFF000000) < (back & 0xFF000000)) {
-                back = line3[x];
+            if ((lineBG[3][x] & 0xFF000000) < (back & 0xFF000000)) {
+                back = lineBG[3][x];
                 top2 = 0x08;
             }
 
@@ -78,29 +66,19 @@ void mode2RenderLineNoWindow(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    if (layerEnable & 0x0400) {
-        gfxDrawRotScreen(&lcd_bg[2], palette, line2);
-    }
-
-    if (layerEnable & 0x0800) {
-        gfxDrawRotScreen(&lcd_bg[3], palette, line3);
-    }
-
-    gfxDrawSprites();
-
     uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
         uint8_t top = 0x20;
 
-        if ((line2[x] & 0xFF000000) < (color & 0xFF000000)) {
-            color = line2[x];
+        if ((lineBG[2][x] & 0xFF000000) < (color & 0xFF000000)) {
+            color = lineBG[2][x];
             top = 0x04;
         }
 
-        if ((line3[x] & 0xFF000000) < (color & 0xFF000000)) {
-            color = line3[x];
+        if ((lineBG[3][x] & 0xFF000000) < (color & 0xFF000000)) {
+            color = lineBG[3][x];
             top = 0x08;
         }
 
@@ -118,16 +96,16 @@ void mode2RenderLineNoWindow(pixFormat* lineMix)
                     uint32_t back = backdrop;
                     uint8_t top2 = 0x20;
 
-                    if ((line2[x] & 0xFF000000) < (back & 0xFF000000)) {
+                    if ((lineBG[2][x] & 0xFF000000) < (back & 0xFF000000)) {
                         if (top != 0x04) {
-                            back = line2[x];
+                            back = lineBG[2][x];
                             top2 = 0x04;
                         }
                     }
 
-                    if ((line3[x] & 0xFF000000) < (back & 0xFF000000)) {
+                    if ((lineBG[3][x] & 0xFF000000) < (back & 0xFF000000)) {
                         if (top != 0x08) {
-                            back = line3[x];
+                            back = lineBG[3][x];
                             top2 = 0x08;
                         }
                     }
@@ -159,13 +137,13 @@ void mode2RenderLineNoWindow(pixFormat* lineMix)
             uint32_t back = backdrop;
             uint8_t top2 = 0x20;
 
-            if ((line2[x] & 0xFF000000) < (back & 0xFF000000)) {
-                back = line2[x];
+            if ((lineBG[2][x] & 0xFF000000) < (back & 0xFF000000)) {
+                back = lineBG[2][x];
                 top2 = 0x04;
             }
 
-            if ((line3[x] & 0xFF000000) < (back & 0xFF000000)) {
-                back = line3[x];
+            if ((lineBG[3][x] & 0xFF000000) < (back & 0xFF000000)) {
+                back = lineBG[3][x];
                 top2 = 0x08;
             }
 
@@ -195,38 +173,8 @@ void mode2RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    bool inWindow0 = false;
-    bool inWindow1 = false;
-
-    if (layerEnable & 0x2000) {
-        uint8_t v0 = WIN0V >> 8;
-        uint8_t v1 = WIN0V & 255;
-        inWindow0 = ((v0 == v1) && (v0 >= 0xe8));
-        if (v1 >= v0)
-            inWindow0 |= (VCOUNT >= v0 && VCOUNT < v1);
-        else
-            inWindow0 |= (VCOUNT >= v0 || VCOUNT < v1);
-    }
-    if (layerEnable & 0x4000) {
-        uint8_t v0 = WIN1V >> 8;
-        uint8_t v1 = WIN1V & 255;
-        inWindow1 = ((v0 == v1) && (v0 >= 0xe8));
-        if (v1 >= v0)
-            inWindow1 |= (VCOUNT >= v0 && VCOUNT < v1);
-        else
-            inWindow1 |= (VCOUNT >= v0 || VCOUNT < v1);
-    }
-
-    if (layerEnable & 0x0400) {
-        gfxDrawRotScreen(&lcd_bg[2], palette, line2);
-    }
-
-    if (layerEnable & 0x0800) {
-        gfxDrawRotScreen(&lcd_bg[3], palette, line3);
-    }
-
-    gfxDrawSprites();
-    gfxDrawOBJWin();
+    bool inWindow0 = LCDPossibleInWindow(0, WIN0V, VCOUNT);
+    bool inWindow1 = LCDPossibleInWindow(1, WIN1V, VCOUNT);
 
     uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
@@ -254,13 +202,13 @@ void mode2RenderLineAll(pixFormat* lineMix)
             }
         }
 
-        if (line2[x] < color && (mask & 4)) {
-            color = line2[x];
+        if (lineBG[2][x] < color && (mask & 4)) {
+            color = lineBG[2][x];
             top = 0x04;
         }
 
-        if ((line3[x] & 0xFF000000) < (color & 0xFF000000) && (mask & 8)) {
-            color = line3[x];
+        if ((lineBG[3][x] & 0xFF000000) < (color & 0xFF000000) && (mask & 8)) {
+            color = lineBG[3][x];
             top = 0x08;
         }
 
@@ -274,13 +222,13 @@ void mode2RenderLineAll(pixFormat* lineMix)
             uint32_t back = backdrop;
             uint8_t top2 = 0x20;
 
-            if ((mask & 4) && line2[x] < back) {
-                back = line2[x];
+            if ((mask & 4) && lineBG[2][x] < back) {
+                back = lineBG[2][x];
                 top2 = 0x04;
             }
 
-            if ((mask & 8) && (line3[x] & 0xFF000000) < (back & 0xFF000000)) {
-                back = line3[x];
+            if ((mask & 8) && (lineBG[3][x] & 0xFF000000) < (back & 0xFF000000)) {
+                back = lineBG[3][x];
                 top2 = 0x08;
             }
 
@@ -310,16 +258,16 @@ void mode2RenderLineAll(pixFormat* lineMix)
                     uint32_t back = backdrop;
                     uint8_t top2 = 0x20;
 
-                    if ((mask & 4) && line2[x] < back) {
+                    if ((mask & 4) && lineBG[2][x] < back) {
                         if (top != 0x04) {
-                            back = line2[x];
+                            back = lineBG[2][x];
                             top2 = 0x04;
                         }
                     }
 
-                    if ((mask & 8) && (line3[x] & 0xFF000000) < (back & 0xFF000000)) {
+                    if ((mask & 8) && (lineBG[3][x] & 0xFF000000) < (back & 0xFF000000)) {
                         if (top != 0x08) {
-                            back = line3[x];
+                            back = lineBG[3][x];
                             top2 = 0x08;
                         }
                     }

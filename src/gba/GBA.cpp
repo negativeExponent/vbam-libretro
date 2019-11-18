@@ -427,11 +427,6 @@ inline int CPUUpdateTicks()
    return cpuLoopTicks;
 }
 
-extern uint32_t line0[240];
-extern uint32_t line1[240];
-extern uint32_t line2[240];
-extern uint32_t line3[240];
-
 #define CLEAR_ARRAY(a)              \
    {                                \
       uint32_t* array = (a);        \
@@ -445,19 +440,19 @@ void CPUUpdateRenderBuffers(bool force)
 {
    if (!(layerEnable & 0x0100) || force)
    {
-      CLEAR_ARRAY(line0);
+      CLEAR_ARRAY(lineBG[0]);
    }
    if (!(layerEnable & 0x0200) || force)
    {
-      CLEAR_ARRAY(line1);
+      CLEAR_ARRAY(lineBG[1]);
    }
    if (!(layerEnable & 0x0400) || force)
    {
-      CLEAR_ARRAY(line2);
+      CLEAR_ARRAY(lineBG[2]);
    }
    if (!(layerEnable & 0x0800) || force)
    {
-      CLEAR_ARRAY(line3);
+      CLEAR_ARRAY(lineBG[3]);
    }
 }
 
@@ -547,15 +542,15 @@ bool CPUReadState(const uint8_t* data, unsigned size)
    CPUUpdateRender();
 
    // CPU Update Render Buffers set to true
-   CLEAR_ARRAY(line0);
-   CLEAR_ARRAY(line1);
-   CLEAR_ARRAY(line2);
-   CLEAR_ARRAY(line3);
+   CLEAR_ARRAY(lineBG[0]);
+   CLEAR_ARRAY(lineBG[1]);
+   CLEAR_ARRAY(lineBG[2]);
+   CLEAR_ARRAY(lineBG[3]);
    // End of CPU Update Render Buffers set to true
 
    LCDUpdateWindow0();
    LCDUpdateWindow1();
-   LCDLoadStateBGParams();
+   LCDUpdateBGRegisters();
 
    SetSaveType(saveType);
 
@@ -2011,7 +2006,7 @@ void CPUReset()
    IF = 0x0000;
    IME = 0x0000;
 
-   LCDResetBGParams();
+   LCDResetBGRegisters();
    renderer.mode = 0;
    renderer.type = 0;
    fxOn = false;
@@ -2309,8 +2304,6 @@ void CPULoop(int ticks)
                   VCOUNT = 0;
                   UPDATE_REG(0x06, VCOUNT);
                   CPUCompareVCOUNT();
-                  LCDUpdateBGRef(2);
-                  LCDUpdateBGRef(3);
                }
             }
             else
@@ -2348,53 +2341,10 @@ void CPULoop(int ticks)
                else
                {
                   // scanline drawing mode
-                  //if (frameCount >= framesToSkip)
+                  //if ((VCOUNT < 160) /* && (frameCount >= framesToSkip) */)
                   {
-                     pixFormat* dest = pix + 240 * VCOUNT;
-                     if ((DISPCNT & 0x80) == 0)
-                     {
-                        // Draw scanline pix to screen buffer
-                        int mode = (renderer.mode << 4) | renderer.type;
-                        switch (mode)
-                        {
-                           case 0x00: mode0RenderLine(dest); break;
-                           case 0x01: mode0RenderLineNoWindow(dest); break;
-                           case 0x02: mode0RenderLineAll(dest); break;
-                           case 0x10: mode1RenderLine(dest); break;
-                           case 0x11: mode1RenderLineNoWindow(dest); break;
-                           case 0x12: mode1RenderLineAll(dest); break;
-                           case 0x20: mode2RenderLine(dest); break;
-                           case 0x21: mode2RenderLineNoWindow(dest); break;
-                           case 0x22: mode2RenderLineAll(dest); break;
-                           case 0x30: mode3RenderLine(dest); break;
-                           case 0x31: mode3RenderLineNoWindow(dest); break;
-                           case 0x32: mode3RenderLineAll(dest); break;
-                           case 0x40: mode4RenderLine(dest); break;
-                           case 0x41: mode4RenderLineNoWindow(dest); break;
-                           case 0x42: mode4RenderLineAll(dest); break;
-                           case 0x50: mode5RenderLine(dest); break;
-                           case 0x51: mode5RenderLineNoWindow(dest); break;
-                           case 0x52: mode5RenderLineAll(dest); break;
-                        }
-                     }
-                     else
-                     {
-                        // draw white screen when during Forced Blank
-                        forceBlankLine(dest);
-                     }
-                  }
-                  if (renderer.mode)
-                  {
-                     if (layerEnable & 0x0400)
-                     {
-                        lcd_bg[2].x_pos += lcd_bg[2].dmx;
-                        lcd_bg[2].y_pos += lcd_bg[2].dmy;
-                     }
-                     if (layerEnable & 0x0800)
-                     {
-                        lcd_bg[3].x_pos += lcd_bg[3].dmx;
-                        lcd_bg[3].y_pos += lcd_bg[3].dmy;
-                     }
+                     pixFormat* dest = pix + GBA_WIDTH * VCOUNT;
+                     gfxDrawScanline(dest, renderer.mode, renderer.type);
                   }
                   // entering H-Blank
                   DISPSTAT |= 2;

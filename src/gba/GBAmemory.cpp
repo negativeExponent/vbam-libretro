@@ -46,14 +46,10 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         windowOn = (layerEnable & 0x6000) ? true : false;
         if (change && !((value & 0x80))) {
             if (!(DISPSTAT & 1)) {
-                //lcdTicks = 1008;
-                //      VCOUNT = 0;
-                //      UPDATE_REG(0x06, VCOUNT);
                 DISPSTAT &= 0xFFFC;
                 UPDATE_REG(0x04, DISPSTAT);
                 CPUCompareVCOUNT();
             }
-            //        (*renderLine)();
         }
         CPUUpdateRender();
         // we only care about changes in BG0-BG3
@@ -67,147 +63,147 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         UPDATE_REG(0x04, DISPSTAT);
         break;
     case 0x06:
-        // not writable
+        // VCOUNT, not writable
         break;
     case 0x08:
-        BG0CNT = (value & 0xDFCF);
+        BG0CNT = (value & 0xDFFF);
         UPDATE_REG(0x08, BG0CNT);
-        LCDUpdateBGCNT(&lcd_bg[0], BG0CNT);
+        LCDUpdateBGCNT(0, BG0CNT);
         break;
     case 0x0A:
-        BG1CNT = (value & 0xDFCF);
+        BG1CNT = (value & 0xDFFF);
         UPDATE_REG(0x0A, BG1CNT);
-        LCDUpdateBGCNT(&lcd_bg[1], BG1CNT);
+        LCDUpdateBGCNT(1, BG1CNT);
         break;
     case 0x0C:
-        BG2CNT = (value & 0xFFCF);
+        BG2CNT = (value & 0xFFFF);
         UPDATE_REG(0x0C, BG2CNT);
-        LCDUpdateBGCNT(&lcd_bg[2], BG2CNT);
+        LCDUpdateBGCNT(2, BG2CNT);
         break;
     case 0x0E:
-        BG3CNT = (value & 0xFFCF);
+        BG3CNT = (value & 0xFFFF);
         UPDATE_REG(0x0E, BG3CNT);
-        LCDUpdateBGCNT(&lcd_bg[3], BG3CNT);
+        LCDUpdateBGCNT(3, BG3CNT);
         break;
     case 0x10:
         BG0HOFS = value & 511;
         UPDATE_REG(0x10, BG0HOFS);
-        LCDUpdateBGHOFS(&lcd_bg[0], BG0HOFS);
+        LCDUpdateBGHOFS(0, BG0HOFS);
         break;
     case 0x12:
         BG0VOFS = value & 511;
         UPDATE_REG(0x12, BG0VOFS);
-        LCDUpdateBGVOFS(&lcd_bg[0], BG0VOFS);
+        LCDUpdateBGVOFS(0, BG0VOFS);
         break;
     case 0x14:
         BG1HOFS = value & 511;
         UPDATE_REG(0x14, BG1HOFS);
-        LCDUpdateBGHOFS(&lcd_bg[1], BG1HOFS);
+        LCDUpdateBGHOFS(1, BG1HOFS);
         break;
     case 0x16:
         BG1VOFS = value & 511;
         UPDATE_REG(0x16, BG1VOFS);
-        LCDUpdateBGVOFS(&lcd_bg[1], BG1VOFS);
+        LCDUpdateBGVOFS(1, BG1VOFS);
         break;
     case 0x18:
         BG2HOFS = value & 511;
         UPDATE_REG(0x18, BG2HOFS);
-        LCDUpdateBGHOFS(&lcd_bg[2], BG2HOFS);
+        LCDUpdateBGHOFS(2, BG2HOFS);
         break;
     case 0x1A:
         BG2VOFS = value & 511;
         UPDATE_REG(0x1A, BG2VOFS);
-        LCDUpdateBGVOFS(&lcd_bg[2], BG2VOFS);
+        LCDUpdateBGVOFS(2, BG2VOFS);
         break;
     case 0x1C:
         BG3HOFS = value & 511;
         UPDATE_REG(0x1C, BG3HOFS);
-        LCDUpdateBGHOFS(&lcd_bg[3], BG3HOFS);
+        LCDUpdateBGHOFS(3, BG3HOFS);
         break;
     case 0x1E:
         BG3VOFS = value & 511;
         UPDATE_REG(0x1E, BG3VOFS);
-        LCDUpdateBGVOFS(&lcd_bg[3], BG3VOFS);
+        LCDUpdateBGVOFS(3, BG3VOFS);
         break;
     case 0x20:
         BG2PA = value;
         UPDATE_REG(0x20, BG2PA);
-        LCDUpdateBGPA(&lcd_bg[2], BG2PA);
+        LCDUpdateBGPA(2, BG2PA);
         break;
     case 0x22:
         BG2PB = value;
         UPDATE_REG(0x22, BG2PB);
-        LCDUpdateBGPB(&lcd_bg[2], BG2PB);
+        LCDUpdateBGPB(2, BG2PB);
         break;
     case 0x24:
         BG2PC = value;
         UPDATE_REG(0x24, BG2PC);
-        LCDUpdateBGPC(&lcd_bg[2], BG2PC);
+        LCDUpdateBGPC(2, BG2PC);
         break;
     case 0x26:
         BG2PD = value;
         UPDATE_REG(0x26, BG2PD);
-        LCDUpdateBGPD(&lcd_bg[2], BG2PD);
+        LCDUpdateBGPD(2, BG2PD);
         break;
     case 0x28:
         BG2X_L = value;
         UPDATE_REG(0x28, BG2X_L);
-        LCDUpdateBGX_L(&lcd_bg[2], BG2X_L);
+        LCDUpdateBGX_L(2, BG2X_L);
         break;
     case 0x2A:
         BG2X_H = (value & 0xFFF);
         UPDATE_REG(0x2A, BG2X_H);
-        LCDUpdateBGX_H(&lcd_bg[2], BG2X_H);
+        LCDUpdateBGX_H(2, BG2X_H);
         break;
     case 0x2C:
         BG2Y_L = value;
         UPDATE_REG(0x2C, BG2Y_L);
-        LCDUpdateBGY_L(&lcd_bg[2], BG2Y_L);
+        LCDUpdateBGY_L(2, BG2Y_L);
         break;
     case 0x2E:
         BG2Y_H = value & 0xFFF;
         UPDATE_REG(0x2E, BG2Y_H);
-        LCDUpdateBGY_H(&lcd_bg[2], BG2Y_H);
+        LCDUpdateBGY_H(2, BG2Y_H);
         break;
     case 0x30:
         BG3PA = value;
         UPDATE_REG(0x30, BG3PA);
-        LCDUpdateBGPA(&lcd_bg[3], BG3PA);
+        LCDUpdateBGPA(3, BG3PA);
         break;
     case 0x32:
         BG3PB = value;
         UPDATE_REG(0x32, BG3PB);
-        LCDUpdateBGPB(&lcd_bg[3], BG3PB);
+        LCDUpdateBGPB(3, BG3PB);
         break;
     case 0x34:
         BG3PC = value;
         UPDATE_REG(0x34, BG3PC);
-        LCDUpdateBGPC(&lcd_bg[3], BG3PC);
+        LCDUpdateBGPC(3, BG3PC);
         break;
     case 0x36:
         BG3PD = value;
         UPDATE_REG(0x36, BG3PD);
-        LCDUpdateBGPD(&lcd_bg[3], BG3PD);
+        LCDUpdateBGPD(3, BG3PD);
         break;
     case 0x38:
         BG3X_L = value;
         UPDATE_REG(0x38, BG3X_L);
-        LCDUpdateBGX_L(&lcd_bg[3],BG3X_L);
+        LCDUpdateBGX_L(3, BG3X_L);
         break;
     case 0x3A:
         BG3X_H = value & 0xFFF;
         UPDATE_REG(0x3A, BG3X_H);
-        LCDUpdateBGX_H(&lcd_bg[3],BG3X_H);
+        LCDUpdateBGX_H(3, BG3X_H);
         break;
     case 0x3C:
         BG3Y_L = value;
         UPDATE_REG(0x3C, BG3Y_L);
-        LCDUpdateBGY_L(&lcd_bg[3],BG3Y_L);
+        LCDUpdateBGY_L(3, BG3Y_L);
         break;
     case 0x3E:
         BG3Y_H = value & 0xFFF;
         UPDATE_REG(0x3E, BG3Y_H);
-        LCDUpdateBGY_H(&lcd_bg[3],BG3Y_H);
+        LCDUpdateBGY_H(3, BG3Y_H);
         break;
     case 0x40:
         WIN0H = value;
