@@ -173,8 +173,8 @@ void mode2RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    bool inWindow0 = LCDPossibleInWindow(0, WIN0V, VCOUNT);
-    bool inWindow1 = LCDPossibleInWindow(1, WIN1V, VCOUNT);
+    bool inWindow0 = LCDUpdateInWindow(0, WIN0V, VCOUNT);
+    bool inWindow1 = LCDUpdateInWindow(1, WIN1V, VCOUNT);
 
     uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 

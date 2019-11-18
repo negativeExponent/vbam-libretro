@@ -146,8 +146,8 @@ void mode5RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    bool inWindow0 = LCDPossibleInWindow(0, WIN0V, VCOUNT);
-    bool inWindow1 = LCDPossibleInWindow(1, WIN1V, VCOUNT);
+    bool inWindow0 = LCDUpdateInWindow(0, WIN0V, VCOUNT);
+    bool inWindow1 = LCDUpdateInWindow(1, WIN1V, VCOUNT);
 
     uint8_t inWin0Mask = WININ & 0xFF;
     uint8_t inWin1Mask = WININ >> 8;

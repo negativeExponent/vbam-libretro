@@ -1715,51 +1715,41 @@ void LCDUpdateBGY_H(int layer, uint16_t value)
    lcd_bg[layer].y_pos = lcd_bg[layer].y_ref;
 }
 
+static bool isInWindow(int min, int max, int x)
+{
+   return x >= min && x < max;
+}
+
 void LCDUpdateWindow0(void)
 {
-    int x00 = WIN0H >> 8;
-    int x01 = WIN0H & 255;
-
-    if (x00 <= x01) {
-        for (int i = 0; i < 240; ++i) {
-            gfxInWin0[i] = (i >= x00 && i < x01);
-        }
-    } else {
-        for (int i = 0; i < 240; ++i) {
-            gfxInWin0[i] = (i >= x00 || i < x01);
-        }
-    }
+   int x00 = WIN0H >> 8;  // Leftmost coordinate of window
+   int x01 = WIN0H & 255; // Rightmost coordinate of window
+   if (x01 > GBA_WIDTH || x00 > x01)
+      x01 = GBA_WIDTH;
+   for (int i = 0; i < GBA_WIDTH; ++i)
+      gfxInWin0[i] = isInWindow(x00, x01, i);
 }
 
 void LCDUpdateWindow1(void)
 {
-    int x00 = WIN1H >> 8;
-    int x01 = WIN1H & 255;
-
-    if (x00 <= x01) {
-        for (int i = 0; i < 240; ++i) {
-            gfxInWin1[i] = (i >= x00 && i < x01);
-        }
-    } else {
-        for (int i = 0; i < 240; ++i) {
-            gfxInWin1[i] = (i >= x00 || i < x01);
-        }
-    }
+   int x00 = WIN1H >> 8;  // Leftmost coordinate of window
+   int x01 = WIN1H & 255; // Rightmost coordinate of window
+   if (x01 > GBA_WIDTH || x00 > x01)
+      x01 = GBA_WIDTH;
+   for (int i = 0; i < 240; ++i)
+      gfxInWin1[i] = isInWindow(x00, x01, i);
 }
 
-bool LCDPossibleInWindow(int which, uint16_t value, uint32_t vcount)
+bool LCDUpdateInWindow(int which, uint16_t value, uint32_t vcount)
 {
    if ((layerEnable & (0x2000 << which)) == 0)
       return false;
 
-   uint8_t v0 = value >> 8;
-   uint8_t v1 = value & 255;
-   bool inWindow = ((v0 == v1) && (v0 >= 0xe8));
-   if (v1 >= v0)
-      inWindow |= (vcount >= v0 && vcount < v1);
-   else
-      inWindow |= (vcount >= v0 || vcount < v1);
-   return inWindow;
+   uint8_t y00 = value >> 8;  // Top-most coordinate of window
+   uint8_t y01 = value & 255; // Bottom-most coordinate of window
+   if (y01 > GBA_HEIGHT || y00 > y01)
+      y01 = GBA_HEIGHT;
+   return isInWindow(y00, y01, vcount);
 }
 
 void LCDResetBGRegisters()

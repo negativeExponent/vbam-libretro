@@ -80,7 +80,7 @@ void LCDUpdateBGY_L(int, uint16_t);
 void LCDUpdateBGY_H(int, uint16_t);
 void LCDUpdateWindow0();
 void LCDUpdateWindow1();
-bool LCDPossibleInWindow(int, uint16_t, uint32_t);
+bool LCDUpdateInWindow(int, uint16_t, uint32_t);
 void LCDResetBGRegisters();
 
 // Used for savestate compatibility.
