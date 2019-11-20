@@ -59,19 +59,19 @@ void mode0RenderLine(pixFormat* lineMix)
                 top2 = 0x08;
             }
 
-            if (top2 & (BLDMOD >> 8))
+            if (top2 & (lcd.bldcnt >> 8))
                 color = gfxAlphaBlend(color, back,
-                    coeff[COLEV & 0x1F],
-                    coeff[(COLEV >> 8) & 0x1F]);
+                    coeff[lcd.bldalpha & 0x1F],
+                    coeff[(lcd.bldalpha >> 8) & 0x1F]);
             else {
-                switch ((BLDMOD >> 6) & 3) {
+                switch ((lcd.bldcnt >> 6) & 3) {
                 case 2:
-                    if (BLDMOD & top)
-                        color = gfxIncreaseBrightness(color, coeff[COLY & 0x1F]);
+                    if (lcd.bldcnt & top)
+                        color = gfxIncreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                     break;
                 case 3:
-                    if (BLDMOD & top)
-                        color = gfxDecreaseBrightness(color, coeff[COLY & 0x1F]);
+                    if (lcd.bldcnt & top)
+                        color = gfxDecreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                     break;
                 }
             }
@@ -87,7 +87,7 @@ void mode0RenderLineNoWindow(pixFormat* lineMix)
 
     uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
-    int effect = (BLDMOD >> 6) & 3;
+    int effect = (lcd.bldcnt >> 6) & 3;
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -123,7 +123,7 @@ void mode0RenderLineNoWindow(pixFormat* lineMix)
             case 0:
                 break;
             case 1: {
-                if (top & BLDMOD) {
+                if (top & lcd.bldcnt) {
                     uint32_t back = backdrop;
                     uint8_t top2 = 0x20;
                     if (lineBG[0][x] < back) {
@@ -161,19 +161,19 @@ void mode0RenderLineNoWindow(pixFormat* lineMix)
                         }
                     }
 
-                    if (top2 & (BLDMOD >> 8))
+                    if (top2 & (lcd.bldcnt >> 8))
                         color = gfxAlphaBlend(color, back,
-                            coeff[COLEV & 0x1F],
-                            coeff[(COLEV >> 8) & 0x1F]);
+                            coeff[lcd.bldalpha & 0x1F],
+                            coeff[(lcd.bldalpha >> 8) & 0x1F]);
                 }
             } break;
             case 2:
-                if (BLDMOD & top)
-                    color = gfxIncreaseBrightness(color, coeff[COLY & 0x1F]);
+                if (lcd.bldcnt & top)
+                    color = gfxIncreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                 break;
             case 3:
-                if (BLDMOD & top)
-                    color = gfxDecreaseBrightness(color, coeff[COLY & 0x1F]);
+                if (lcd.bldcnt & top)
+                    color = gfxDecreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                 break;
             }
         } else {
@@ -201,19 +201,19 @@ void mode0RenderLineNoWindow(pixFormat* lineMix)
                 top2 = 0x08;
             }
 
-            if (top2 & (BLDMOD >> 8))
+            if (top2 & (lcd.bldcnt >> 8))
                 color = gfxAlphaBlend(color, back,
-                    coeff[COLEV & 0x1F],
-                    coeff[(COLEV >> 8) & 0x1F]);
+                    coeff[lcd.bldalpha & 0x1F],
+                    coeff[(lcd.bldalpha >> 8) & 0x1F]);
             else {
-                switch ((BLDMOD >> 6) & 3) {
+                switch ((lcd.bldcnt >> 6) & 3) {
                 case 2:
-                    if (BLDMOD & top)
-                        color = gfxIncreaseBrightness(color, coeff[COLY & 0x1F]);
+                    if (lcd.bldcnt & top)
+                        color = gfxIncreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                     break;
                 case 3:
-                    if (BLDMOD & top)
-                        color = gfxDecreaseBrightness(color, coeff[COLY & 0x1F]);
+                    if (lcd.bldcnt & top)
+                        color = gfxDecreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                     break;
                 }
             }
@@ -227,14 +227,14 @@ void mode0RenderLineAll(pixFormat* lineMix)
 {
     uint16_t* palette = (uint16_t*)paletteRAM;
 
-    bool inWindow0 = LCDUpdateInWindow(0, WIN0V, VCOUNT);
-    bool inWindow1 = LCDUpdateInWindow(1, WIN1V, VCOUNT);
+    bool inWindow0 = LCDUpdateInWindow(0, lcd.winv[0], lcd.vcount);
+    bool inWindow1 = LCDUpdateInWindow(1, lcd.winv[1], lcd.vcount);
 
     uint32_t backdrop = (READ16LE(&palette[0]) | 0x30000000);
 
-    uint8_t inWin0Mask = WININ & 0xFF;
-    uint8_t inWin1Mask = WININ >> 8;
-    uint8_t outMask = WINOUT & 0xFF;
+    uint8_t inWin0Mask = lcd.winin & 0xFF;
+    uint8_t inWin1Mask = lcd.winin >> 8;
+    uint8_t outMask = lcd.winout & 0xFF;
 
     for (int x = 0; x < 240; x++) {
         uint32_t color = backdrop;
@@ -242,7 +242,7 @@ void mode0RenderLineAll(pixFormat* lineMix)
         uint8_t mask = outMask;
 
         if (!(lineOBJWin[x] & 0x80000000)) {
-            mask = WINOUT >> 8;
+            mask = lcd.winout >> 8;
         }
 
         if (inWindow1) {
@@ -306,29 +306,29 @@ void mode0RenderLineAll(pixFormat* lineMix)
                 top2 = 0x08;
             }
 
-            if (top2 & (BLDMOD >> 8))
+            if (top2 & (lcd.bldcnt >> 8))
                 color = gfxAlphaBlend(color, back,
-                    coeff[COLEV & 0x1F],
-                    coeff[(COLEV >> 8) & 0x1F]);
+                    coeff[lcd.bldalpha & 0x1F],
+                    coeff[(lcd.bldalpha >> 8) & 0x1F]);
             else {
-                switch ((BLDMOD >> 6) & 3) {
+                switch ((lcd.bldcnt >> 6) & 3) {
                 case 2:
-                    if (BLDMOD & top)
-                        color = gfxIncreaseBrightness(color, coeff[COLY & 0x1F]);
+                    if (lcd.bldcnt & top)
+                        color = gfxIncreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                     break;
                 case 3:
-                    if (BLDMOD & top)
-                        color = gfxDecreaseBrightness(color, coeff[COLY & 0x1F]);
+                    if (lcd.bldcnt & top)
+                        color = gfxDecreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                     break;
                 }
             }
         } else if (mask & 32) {
             // special FX on in the window
-            switch ((BLDMOD >> 6) & 3) {
+            switch ((lcd.bldcnt >> 6) & 3) {
             case 0:
                 break;
             case 1: {
-                if (top & BLDMOD) {
+                if (top & lcd.bldcnt) {
                     uint32_t back = backdrop;
                     uint8_t top2 = 0x20;
                     if ((mask & 1) && (lineBG[0][x] & 0xFF000000) < (back & 0xFF000000)) {
@@ -366,19 +366,19 @@ void mode0RenderLineAll(pixFormat* lineMix)
                         }
                     }
 
-                    if (top2 & (BLDMOD >> 8))
+                    if (top2 & (lcd.bldcnt >> 8))
                         color = gfxAlphaBlend(color, back,
-                            coeff[COLEV & 0x1F],
-                            coeff[(COLEV >> 8) & 0x1F]);
+                            coeff[lcd.bldalpha & 0x1F],
+                            coeff[(lcd.bldalpha >> 8) & 0x1F]);
                 }
             } break;
             case 2:
-                if (BLDMOD & top)
-                    color = gfxIncreaseBrightness(color, coeff[COLY & 0x1F]);
+                if (lcd.bldcnt & top)
+                    color = gfxIncreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                 break;
             case 3:
-                if (BLDMOD & top)
-                    color = gfxDecreaseBrightness(color, coeff[COLY & 0x1F]);
+                if (lcd.bldcnt & top)
+                    color = gfxDecreaseBrightness(color, coeff[lcd.bldy & 0x1F]);
                 break;
             }
         }

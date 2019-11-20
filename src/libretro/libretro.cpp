@@ -1025,7 +1025,7 @@ static void update_variables(bool startup)
     }
 
     layerSettings = 0xFF00 ^ disabled_layers;
-    layerEnable = DISPCNT & layerSettings;
+    layerEnable = lcd.dispcnt & layerSettings;
     CPUUpdateRenderBuffers(false);
 
     strcpy(key, "vbam_sound_x");

@@ -48,7 +48,7 @@ void BIOS_ArcTan()
     if (systemVerbose & VERBOSE_SWI) {
         log("ArcTan: %08x (VCOUNT=%2d)\n",
             reg[0].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -78,7 +78,7 @@ void BIOS_ArcTan2()
         log("ArcTan2: %08x,%08x (VCOUNT=%2d)\n",
             reg[0].I,
             reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -126,7 +126,7 @@ void BIOS_BitUnPack()
             reg[0].I,
             reg[1].I,
             reg[2].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -192,7 +192,7 @@ void BIOS_BgAffineSet()
             reg[0].I,
             reg[1].I,
             reg[2].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -247,7 +247,7 @@ void BIOS_CpuSet()
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
         log("CpuSet: 0x%08x,0x%08x,0x%08x (VCOUNT=%d)\n", reg[0].I, reg[1].I,
-            reg[2].I, VCOUNT);
+            reg[2].I, lcd.vcount);
     }
 #endif
 
@@ -308,7 +308,7 @@ void BIOS_CpuFastSet()
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
         log("CpuFastSet: 0x%08x,0x%08x,0x%08x (VCOUNT=%d)\n", reg[0].I, reg[1].I,
-            reg[2].I, VCOUNT);
+            reg[2].I, lcd.vcount);
     }
 #endif
 
@@ -355,7 +355,7 @@ void BIOS_Diff8bitUnFilterWram()
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
         log("Diff8bitUnFilterWram: 0x%08x,0x%08x (VCOUNT=%d)\n", reg[0].I,
-            reg[1].I, VCOUNT);
+            reg[1].I, lcd.vcount);
     }
 #endif
 
@@ -387,7 +387,7 @@ void BIOS_Diff8bitUnFilterVram()
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
         log("Diff8bitUnFilterVram: 0x%08x,0x%08x (VCOUNT=%d)\n", reg[0].I,
-            reg[1].I, VCOUNT);
+            reg[1].I, lcd.vcount);
     }
 #endif
 
@@ -429,7 +429,7 @@ void BIOS_Diff16bitUnFilter()
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
         log("Diff16bitUnFilter: 0x%08x,0x%08x (VCOUNT=%d)\n", reg[0].I,
-            reg[1].I, VCOUNT);
+            reg[1].I, lcd.vcount);
     }
 #endif
 
@@ -467,7 +467,7 @@ void BIOS_Div()
         log("Div: 0x%08x,0x%08x (VCOUNT=%d)\n",
             reg[0].I,
             reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -496,7 +496,7 @@ void BIOS_DivARM()
     if (systemVerbose & VERBOSE_SWI) {
         log("DivARM: 0x%08x, (VCOUNT=%d)\n",
             reg[0].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -513,7 +513,7 @@ void BIOS_HuffUnComp()
         log("HuffUnComp: 0x%08x,0x%08x (VCOUNT=%d)\n",
             reg[0].I,
             reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -658,7 +658,7 @@ void BIOS_LZ77UnCompVram()
         log("LZ77UnCompVram: 0x%08x,0x%08x (VCOUNT=%d)\n",
             reg[0].I,
             reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -746,7 +746,7 @@ void BIOS_LZ77UnCompWram()
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
         log("LZ77UnCompWram: 0x%08x,0x%08x (VCOUNT=%d)\n", reg[0].I, reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -806,7 +806,7 @@ void BIOS_ObjAffineSet()
             reg[1].I,
             reg[2].I,
             reg[3].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -924,7 +924,7 @@ void BIOS_RegisterRamReset()
     if (systemVerbose & VERBOSE_SWI) {
         log("RegisterRamReset: 0x%08x (VCOUNT=%d)\n",
             reg[0].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -938,7 +938,7 @@ void BIOS_RLUnCompVram()
         log("RLUnCompVram: 0x%08x,0x%08x (VCOUNT=%d)\n",
             reg[0].I,
             reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -1006,7 +1006,7 @@ void BIOS_RLUnCompWram()
         log("RLUnCompWram: 0x%08x,0x%08x (VCOUNT=%d)\n",
             reg[0].I,
             reg[1].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
 
@@ -1049,7 +1049,7 @@ void BIOS_SoftReset()
 {
 #ifdef GBA_LOGGING
     if (systemVerbose & VERBOSE_SWI) {
-        log("SoftReset: (VCOUNT=%d)\n", VCOUNT);
+        log("SoftReset: (VCOUNT=%d)\n", lcd.vcount);
     }
 #endif
 
@@ -1085,7 +1085,7 @@ void BIOS_Sqrt()
     if (systemVerbose & VERBOSE_SWI) {
         log("Sqrt: %08x (VCOUNT=%2d)\n",
             reg[0].I,
-            VCOUNT);
+            lcd.vcount);
     }
 #endif
     reg[0].I = (uint32_t)sqrt((double)reg[0].I);

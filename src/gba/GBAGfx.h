@@ -7,17 +7,50 @@
 
 struct lcd_background_t
 {
-    uint16_t control;
-    uint16_t h_offset;
-    uint16_t v_offset;
-    int dx;
-    int dmx;
-    int dy;
-    int dmy;
-    int x_ref;
-    int y_ref;
-    int x_pos;
-    int y_pos;
+    int index;
+
+    // BGCNT
+    int priority;
+    int char_base;
+    int mosaic;
+    int palette256;
+    int screen_base;
+    int overflow;
+    int screen_size;
+
+    // Horizontal/Vertical Offsets    
+    uint16_t hofs;
+    uint16_t vofs;
+    
+    // BG Affine
+    int16_t dx;
+    int16_t dmx;
+    int16_t dy;
+    int16_t dmy;
+    int32_t x_ref;
+    int32_t y_ref;
+    int32_t x_pos;
+    int32_t y_pos;
+};
+
+struct gba_lcd_t
+{
+    uint16_t dispcnt;
+    uint16_t dispstat;
+    uint16_t vcount;
+
+    lcd_background_t bg[4];
+
+    uint16_t winh[2];
+    uint16_t winv[2];
+    uint16_t winin;
+    uint16_t winout;
+
+    uint16_t mosaic;
+
+    uint16_t bldcnt;
+    uint16_t bldalpha;
+    uint16_t bldy;
 };
 
 struct lcd_renderer_t
@@ -30,9 +63,9 @@ struct lcd_renderer_t
 
 void gfxDrawTextScreen(int);
 void gfxDrawRotScreen(int);
-void gfxDrawRotScreen16Bit(int);
-void gfxDrawRotScreen256(int);
-void gfxDrawRotScreen16Bit160(int);
+void gfxDrawRotScreen16Bit();
+void gfxDrawRotScreen256();
+void gfxDrawRotScreen16Bit160();
 void gfxDrawSprites();
 void gfxDrawOBJWin();
 static void gfxIncreaseBrightness(uint32_t* line, int coeff);
@@ -68,12 +101,6 @@ void gfxDrawScanline(pixFormat*, int, int);
 
 // LCD Background Registers
 void LCDUpdateBGCNT(int, uint16_t);
-void LCDUpdateBGHOFS(int, uint16_t);
-void LCDUpdateBGVOFS(int, uint16_t);
-void LCDUpdateBGPA(int, uint16_t);
-void LCDUpdateBGPB(int, uint16_t);
-void LCDUpdateBGPC(int, uint16_t);
-void LCDUpdateBGPD(int, uint16_t);
 void LCDUpdateBGX_L(int, uint16_t);
 void LCDUpdateBGX_H(int, uint16_t);
 void LCDUpdateBGY_L(int, uint16_t);
@@ -95,6 +122,8 @@ extern bool gfxInWin0[240];
 extern bool gfxInWin1[240];
 extern int lineOBJpixleft[128];
 extern uint16_t systemColorMap16[0x10000];
+
+extern gba_lcd_t lcd;
 
 #define MAKECOLOR(color) systemColorMap16[(color) & 0xFFFF]
 

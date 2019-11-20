@@ -270,47 +270,46 @@ uint32_t myROM[] = {
 };
 
 variable_desc saveGameStruct[] = {
-   { &DISPCNT, sizeof(uint16_t) },
-   { &DISPSTAT, sizeof(uint16_t) },
-   { &VCOUNT, sizeof(uint16_t) },
+   // IO:LCD
+   { &lcd.dispcnt, sizeof(uint16_t) },
+   { &lcd.dispstat, sizeof(uint16_t) },
+   { &lcd.vcount, sizeof(uint16_t) },
    { &BG0CNT, sizeof(uint16_t) },
    { &BG1CNT, sizeof(uint16_t) },
    { &BG2CNT, sizeof(uint16_t) },
    { &BG3CNT, sizeof(uint16_t) },
-   { &BG0HOFS, sizeof(uint16_t) },
-   { &BG0VOFS, sizeof(uint16_t) },
-   { &BG1HOFS, sizeof(uint16_t) },
-   { &BG1VOFS, sizeof(uint16_t) },
-   { &BG2HOFS, sizeof(uint16_t) },
-   { &BG2VOFS, sizeof(uint16_t) },
-   { &BG3HOFS, sizeof(uint16_t) },
-   { &BG3VOFS, sizeof(uint16_t) },
-   { &BG2PA, sizeof(uint16_t) },
-   { &BG2PB, sizeof(uint16_t) },
-   { &BG2PC, sizeof(uint16_t) },
-   { &BG2PD, sizeof(uint16_t) },
-   { &BG2X_L, sizeof(uint16_t) },
-   { &BG2X_H, sizeof(uint16_t) },
-   { &BG2Y_L, sizeof(uint16_t) },
-   { &BG2Y_H, sizeof(uint16_t) },
-   { &BG3PA, sizeof(uint16_t) },
-   { &BG3PB, sizeof(uint16_t) },
-   { &BG3PC, sizeof(uint16_t) },
-   { &BG3PD, sizeof(uint16_t) },
-   { &BG3X_L, sizeof(uint16_t) },
-   { &BG3X_H, sizeof(uint16_t) },
-   { &BG3Y_L, sizeof(uint16_t) },
-   { &BG3Y_H, sizeof(uint16_t) },
-   { &WIN0H, sizeof(uint16_t) },
-   { &WIN1H, sizeof(uint16_t) },
-   { &WIN0V, sizeof(uint16_t) },
-   { &WIN1V, sizeof(uint16_t) },
-   { &WININ, sizeof(uint16_t) },
-   { &WINOUT, sizeof(uint16_t) },
-   { &MOSAIC, sizeof(uint16_t) },
-   { &BLDMOD, sizeof(uint16_t) },
-   { &COLEV, sizeof(uint16_t) },
-   { &COLY, sizeof(uint16_t) },
+   { &lcd.bg[0].hofs, sizeof(uint16_t) },
+   { &lcd.bg[0].vofs, sizeof(uint16_t) },
+   { &lcd.bg[1].hofs, sizeof(uint16_t) },
+   { &lcd.bg[1].vofs, sizeof(uint16_t) },
+   { &lcd.bg[2].hofs, sizeof(uint16_t) },
+   { &lcd.bg[2].vofs, sizeof(uint16_t) },
+   { &lcd.bg[3].hofs, sizeof(uint16_t) },
+   { &lcd.bg[3].vofs, sizeof(uint16_t) },
+   { &lcd.bg[2].dx, sizeof(int16_t) },
+   { &lcd.bg[2].dmx, sizeof(int16_t) },
+   { &lcd.bg[2].dy, sizeof(int16_t) },
+   { &lcd.bg[2].dmy, sizeof(int16_t) },
+   { &lcd.bg[2].x_ref, sizeof(int32_t) },
+   { &lcd.bg[2].y_ref, sizeof(int32_t) },   
+   { &lcd.bg[3].dx, sizeof(int16_t) },
+   { &lcd.bg[3].dmx, sizeof(int16_t) },
+   { &lcd.bg[3].dy, sizeof(int16_t) },
+   { &lcd.bg[3].dmy, sizeof(int16_t) },
+   { &lcd.bg[3].x_ref, sizeof(int32_t) },
+   { &lcd.bg[3].y_ref, sizeof(int32_t) },
+   { &lcd.winh[0], sizeof(uint16_t) },
+   { &lcd.winh[1], sizeof(uint16_t) },
+   { &lcd.winv[0], sizeof(uint16_t) },
+   { &lcd.winv[1], sizeof(uint16_t) },
+   { &lcd.winin, sizeof(uint16_t) },
+   { &lcd.winout, sizeof(uint16_t) },
+   { &lcd.mosaic, sizeof(uint16_t) },
+   { &lcd.bldcnt, sizeof(uint16_t) },
+   { &lcd.bldalpha, sizeof(uint16_t) },
+   { &lcd.bldy, sizeof(uint16_t) },
+
+   // IO:DMA
    { &DM0SAD_L, sizeof(uint16_t) },
    { &DM0SAD_H, sizeof(uint16_t) },
    { &DM0DAD_L, sizeof(uint16_t) },
@@ -335,6 +334,8 @@ variable_desc saveGameStruct[] = {
    { &DM3DAD_H, sizeof(uint16_t) },
    { &DM3CNT_L, sizeof(uint16_t) },
    { &DM3CNT_H, sizeof(uint16_t) },
+
+   // IO:TIMER
    { &TM0D, sizeof(uint16_t) },
    { &TM0CNT, sizeof(uint16_t) },
    { &TM1D, sizeof(uint16_t) },
@@ -343,10 +344,15 @@ variable_desc saveGameStruct[] = {
    { &TM2CNT, sizeof(uint16_t) },
    { &TM3D, sizeof(uint16_t) },
    { &TM3CNT, sizeof(uint16_t) },
+
+   // OTHERS
    { &P1, sizeof(uint16_t) },
    { &IE, sizeof(uint16_t) },
    { &IF, sizeof(uint16_t) },
    { &IME, sizeof(uint16_t) },
+
+   /* === end of IO REGS === */
+
    { &holdState, sizeof(bool) },
    { &holdType, sizeof(int) },
    { &lcdTicks, sizeof(int) },
@@ -537,7 +543,7 @@ bool CPUReadState(const uint8_t* data, unsigned size)
 
    //// Copypasta stuff ...
    // set pointers!
-   layerEnable = layerSettings & DISPCNT;
+   layerEnable = layerSettings & lcd.dispcnt;
 
    CPUUpdateRender();
 
@@ -751,9 +757,7 @@ void SetSaveDotCodeFile(const char* szFile)
 
 void CPUUpdateRender()
 {
-   int mode = (DISPCNT & 7);
-   if (mode > 5)
-      return;
+   int mode = (lcd.dispcnt & 7);
    renderer.mode = mode;
    if (!windowOn && !(layerEnable & 0x8000))
    {
@@ -990,7 +994,7 @@ void CPUSoftwareInterrupt(int comment)
              reg[0].I,
              reg[1].I,
              reg[2].I,
-             VCOUNT);
+             lcd.vcount);
       }
 #endif
       if ((comment & 0xF8) != 0xE0)
@@ -1026,7 +1030,7 @@ void CPUSoftwareInterrupt(int comment)
          if (systemVerbose & VERBOSE_SWI)
          {
             /*log("Halt: (VCOUNT = %2d)\n",
-          VCOUNT);*/
+          lcd.vcount);*/
          }
 #endif
          holdState = true;
@@ -1038,7 +1042,7 @@ void CPUSoftwareInterrupt(int comment)
          if (systemVerbose & VERBOSE_SWI)
          {
             /*log("Stop: (VCOUNT = %2d)\n",
-          VCOUNT);*/
+          lcd.vcount);*/
          }
 #endif
          holdState = true;
@@ -1053,7 +1057,7 @@ void CPUSoftwareInterrupt(int comment)
             log("IntrWait: 0x%08x,0x%08x (VCOUNT = %2d)\n",
                 reg[0].I,
                 reg[1].I,
-                VCOUNT);
+                lcd.vcount);
          }
 #endif
          CPU_SOFTWARE_INTERRUPT();
@@ -1063,7 +1067,7 @@ void CPUSoftwareInterrupt(int comment)
          if (systemVerbose & VERBOSE_SWI)
          {
             log("VBlankIntrWait: (VCOUNT = %2d)\n",
-                VCOUNT);
+                lcd.vcount);
          }
 #endif
          CPU_SOFTWARE_INTERRUPT();
@@ -1204,7 +1208,7 @@ void CPUSoftwareInterrupt(int comment)
          {
             log("SoundBiasSet: 0x%08x (VCOUNT = %2d)\n",
                 reg[0].I,
-                VCOUNT);
+                lcd.vcount);
          }
 #endif
          if (reg[0].I)
@@ -1260,7 +1264,7 @@ void CPUSoftwareInterrupt(int comment)
                 reg[0].I,
                 reg[1].I,
                 reg[2].I,
-                VCOUNT);
+                lcd.vcount);
          }
 #endif
 
@@ -1278,12 +1282,12 @@ void CPUSoftwareInterrupt(int comment)
 
 void CPUCompareVCOUNT(void)
 {
-   if (VCOUNT == (DISPSTAT >> 8))
+   if (lcd.vcount == (lcd.dispstat >> 8))
    {
-      DISPSTAT |= 4;
-      UPDATE_REG(0x04, DISPSTAT);
+      lcd.dispstat |= 4;
+      UPDATE_REG(0x04, lcd.dispstat);
 
-      if (DISPSTAT & 0x20)
+      if (lcd.dispstat & 0x20)
       {
          IF |= 4;
          UPDATE_REG(0x202, IF);
@@ -1291,14 +1295,14 @@ void CPUCompareVCOUNT(void)
    }
    else
    {
-      DISPSTAT &= 0xFFFB;
-      UPDATE_REG(0x4, DISPSTAT);
+      lcd.dispstat &= 0xFFFB;
+      UPDATE_REG(0x4, lcd.dispstat);
    }
    if (layerEnableDelay > 0)
    {
       layerEnableDelay--;
       if (layerEnableDelay == 1)
-         layerEnable = layerSettings & DISPCNT;
+         layerEnable = layerSettings & lcd.dispcnt;
    }
 }
 
@@ -1928,21 +1932,21 @@ void CPUReset()
    // clean io memory
    memset(ioMem, 0, SIZE_IOMEM);
 
-   DISPCNT = 0x0080;
-   DISPSTAT = 0x0000;
-   VCOUNT = (useBios && !skipBios) ? 0 : 0x007E;
+   lcd.dispcnt = 0x0080;
+   lcd.dispstat = 0x0000;
+   lcd.vcount = (useBios && !skipBios) ? 0 : 0x007E;
    BG0CNT = 0x0000;
    BG1CNT = 0x0000;
    BG2CNT = 0x0000;
    BG3CNT = 0x0000;
-   BG0HOFS = 0x0000;
-   BG0VOFS = 0x0000;
-   BG1HOFS = 0x0000;
-   BG1VOFS = 0x0000;
-   BG2HOFS = 0x0000;
-   BG2VOFS = 0x0000;
-   BG3HOFS = 0x0000;
-   BG3VOFS = 0x0000;
+   lcd.bg[0].hofs = 0x0000;
+   lcd.bg[0].vofs = 0x0000;
+   lcd.bg[1].hofs = 0x0000;
+   lcd.bg[1].vofs = 0x0000;
+   lcd.bg[2].hofs = 0x0000;
+   lcd.bg[2].vofs = 0x0000;
+   lcd.bg[3].hofs = 0x0000;
+   lcd.bg[3].vofs = 0x0000;
    BG2PA = 0x0100;
    BG2PB = 0x0000;
    BG2PC = 0x0000;
@@ -1959,16 +1963,16 @@ void CPUReset()
    BG3X_H = 0x0000;
    BG3Y_L = 0x0000;
    BG3Y_H = 0x0000;
-   WIN0H = 0x0000;
-   WIN1H = 0x0000;
-   WIN0V = 0x0000;
-   WIN1V = 0x0000;
-   WININ = 0x0000;
-   WINOUT = 0x0000;
-   MOSAIC = 0x0000;
-   BLDMOD = 0x0000;
-   COLEV = 0x0000;
-   COLY = 0x0000;
+   lcd.winh[0] = 0x0000;
+   lcd.winh[1] = 0x0000;
+   lcd.winv[0] = 0x0000;
+   lcd.winv[1] = 0x0000;
+   lcd.winin = 0x0000;
+   lcd.winout = 0x0000;
+   lcd.mosaic = 0x0000;
+   lcd.bldcnt = 0x0000;
+   lcd.bldalpha = 0x0000;
+   lcd.bldy = 0x0000;
    DM0SAD_L = 0x0000;
    DM0SAD_H = 0x0000;
    DM0DAD_L = 0x0000;
@@ -2043,8 +2047,8 @@ void CPUReset()
    }
    armState = true;
    C_FLAG = V_FLAG = N_FLAG = Z_FLAG = false;
-   UPDATE_REG(0x00, DISPCNT);
-   UPDATE_REG(0x06, VCOUNT);
+   UPDATE_REG(0x00, lcd.dispcnt);
+   UPDATE_REG(0x06, lcd.vcount);
    UPDATE_REG(0x20, BG2PA);
    UPDATE_REG(0x26, BG2PD);
    UPDATE_REG(0x30, BG3PA);
@@ -2084,7 +2088,7 @@ void CPUReset()
    }
 
    lcdTicks = (useBios && !skipBios) ? 1008 : 208;
-   layerEnable = DISPCNT & layerSettings;
+   layerEnable = lcd.dispcnt & layerSettings;
 
    CPUUpdateRenderBuffers(true);
 
@@ -2272,60 +2276,60 @@ void CPULoop(int ticks)
 
          if (lcdTicks <= 0)
          {
-            if (DISPSTAT & 1)
+            if (lcd.dispstat & 1)
             {
                // V-BLANK
                // if in V-Blank mode, keep computing...
-               if (DISPSTAT & 2)
+               if (lcd.dispstat & 2)
                {
                   lcdTicks += 1008;
-                  VCOUNT++;
-                  UPDATE_REG(0x06, VCOUNT);
-                  DISPSTAT &= 0xFFFD;
-                  UPDATE_REG(0x04, DISPSTAT);
+                  lcd.vcount++;
+                  UPDATE_REG(0x06, lcd.vcount);
+                  lcd.dispstat &= 0xFFFD;
+                  UPDATE_REG(0x04, lcd.dispstat);
                   CPUCompareVCOUNT();
                }
                else
                {
                   lcdTicks += 224;
-                  DISPSTAT |= 2;
-                  UPDATE_REG(0x04, DISPSTAT);
-                  if (DISPSTAT & 16)
+                  lcd.dispstat |= 2;
+                  UPDATE_REG(0x04, lcd.dispstat);
+                  if (lcd.dispstat & 16)
                   {
                      IF |= 2;
                      UPDATE_REG(0x202, IF);
                   }
                }
-               if (VCOUNT > 227)
+               if (lcd.vcount > 227)
                {
                   //Reaching last line
-                  DISPSTAT &= 0xFFFC;
-                  UPDATE_REG(0x04, DISPSTAT);
-                  VCOUNT = 0;
-                  UPDATE_REG(0x06, VCOUNT);
+                  lcd.dispstat &= 0xFFFC;
+                  UPDATE_REG(0x04, lcd.dispstat);
+                  lcd.vcount = 0;
+                  UPDATE_REG(0x06, lcd.vcount);
                   CPUCompareVCOUNT();
                }
             }
             else
             {
-               if (DISPSTAT & 2)
+               if (lcd.dispstat & 2)
                {
                   // if in H-Blank, leave it and move to drawing mode
-                  VCOUNT++;
-                  UPDATE_REG(0x06, VCOUNT);
+                  lcd.vcount++;
+                  UPDATE_REG(0x06, lcd.vcount);
                   lcdTicks += 1008;
-                  DISPSTAT &= 0xFFFD;
-                  if (VCOUNT == 160)
+                  lcd.dispstat &= 0xFFFD;
+                  if (lcd.vcount == 160)
                   {
                      //uint32_t ext = (joy >> 10);
                      // If no (m) code is enabled, apply the cheats at each LCDline
                      //if ((cheatsEnabled) && (mastercode == 0)) {
                      //remainingTicks += cheatsCheckKeys(P1 ^ 0x3FF, ext);
                      //}
-                     DISPSTAT |= 1;
-                     DISPSTAT &= 0xFFFD;
-                     UPDATE_REG(0x04, DISPSTAT);
-                     if (DISPSTAT & 0x0008)
+                     lcd.dispstat |= 1;
+                     lcd.dispstat &= 0xFFFD;
+                     UPDATE_REG(0x04, lcd.dispstat);
+                     if (lcd.dispstat & 0x0008)
                      {
                         IF |= 1;
                         UPDATE_REG(0x202, IF);
@@ -2335,23 +2339,23 @@ void CPULoop(int ticks)
                      systemDrawScreen(pix);
                      hasFrames = true;
                   }
-                  UPDATE_REG(0x04, DISPSTAT);
+                  UPDATE_REG(0x04, lcd.dispstat);
                   CPUCompareVCOUNT();
                }
                else
                {
                   // scanline drawing mode
-                  //if ((VCOUNT < 160) /* && (frameCount >= framesToSkip) */)
+                  //if ((lcd.vcount < 160) /* && (frameCount >= framesToSkip) */)
                   {
-                     pixFormat* dest = pix + GBA_WIDTH * VCOUNT;
+                     pixFormat* dest = pix + GBA_WIDTH * lcd.vcount;
                      gfxDrawScanline(dest, renderer.mode, renderer.type);
                   }
                   // entering H-Blank
-                  DISPSTAT |= 2;
-                  UPDATE_REG(0x04, DISPSTAT);
+                  lcd.dispstat |= 2;
+                  UPDATE_REG(0x04, lcd.dispstat);
                   lcdTicks += 224;
                   CPUCheckDMA(2, 0x0f);
-                  if (DISPSTAT & 16)
+                  if (lcd.dispstat & 16)
                   {
                      IF |= 2;
                      UPDATE_REG(0x202, IF);

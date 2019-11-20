@@ -19,21 +19,21 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
    /*if (address >= 0x008 && address < 0x056)
    {
       log("LCD REG: A:%04x V:%04x VideoMode = %02x VCOUNT = %3d\n",
-         address, value, DISPCNT & 7, VCOUNT);
+         address, value, lcd.dispcnt & 7, lcd.vcount);
    }*/
 
     switch (address) {
     case 0x00: {
-        if ((value & 7) > 5) {
+        if ((value & 7) <= 5) {
             // display modes above 0-5 are prohibited
-            DISPCNT = (value & 7);
-        }
-        bool change = (0 != ((DISPCNT ^ value) & 0x80));
-        bool changeBG = (0 != ((DISPCNT ^ value) & 0x0F00));
-        uint16_t changeBGon = ((~DISPCNT) & value) & 0x0F00; // these layers are being activated
+            lcd.dispcnt = (value & 7);
+        } else log("Invalid display mode: %d\n",value & 7);
+        bool change = (0 != ((lcd.dispcnt ^ value) & 0x80));
+        bool changeBG = (0 != ((lcd.dispcnt ^ value) & 0x0F00));
+        uint16_t changeBGon = ((~lcd.dispcnt) & value) & 0x0F00; // these layers are being activated
 
-        DISPCNT = (value & 0xFFF7); // bit 3 can only be accessed by the BIOS to enable GBC mode
-        UPDATE_REG(0x00, DISPCNT);
+        lcd.dispcnt = (value & 0xFFF7); // bit 3 can only be accessed by the BIOS to enable GBC mode
+        UPDATE_REG(0x00, lcd.dispcnt);
 
         if (changeBGon) {
             layerEnableDelay = 4;
@@ -45,9 +45,9 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
 
         windowOn = (layerEnable & 0x6000) ? true : false;
         if (change && !((value & 0x80))) {
-            if (!(DISPSTAT & 1)) {
-                DISPSTAT &= 0xFFFC;
-                UPDATE_REG(0x04, DISPSTAT);
+            if (!(lcd.dispstat & 1)) {
+                lcd.dispstat &= 0xFFFC;
+                UPDATE_REG(0x04, lcd.dispstat);
                 CPUCompareVCOUNT();
             }
         }
@@ -59,11 +59,11 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         break;
     }
     case 0x04:
-        DISPSTAT = (value & 0xFF38) | (DISPSTAT & 7);
-        UPDATE_REG(0x04, DISPSTAT);
+        lcd.dispstat = (value & 0xFF38) | (lcd.dispstat & 7);
+        UPDATE_REG(0x04, lcd.dispstat);
         break;
     case 0x06:
-        // VCOUNT, not writable
+        // lcd.vcount, not writable
         break;
     case 0x08:
         BG0CNT = (value & 0xDFFF);
@@ -86,64 +86,56 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         LCDUpdateBGCNT(3, BG3CNT);
         break;
     case 0x10:
-        BG0HOFS = value & 511;
-        UPDATE_REG(0x10, BG0HOFS);
-        LCDUpdateBGHOFS(0, BG0HOFS);
+        lcd.bg[0].hofs = value & 511;
+        UPDATE_REG(0x10, lcd.bg[0].hofs);
         break;
     case 0x12:
-        BG0VOFS = value & 511;
-        UPDATE_REG(0x12, BG0VOFS);
-        LCDUpdateBGVOFS(0, BG0VOFS);
+        lcd.bg[0].vofs = value & 511;
+        UPDATE_REG(0x12, lcd.bg[0].vofs);
         break;
     case 0x14:
-        BG1HOFS = value & 511;
-        UPDATE_REG(0x14, BG1HOFS);
-        LCDUpdateBGHOFS(1, BG1HOFS);
+        lcd.bg[1].hofs = value & 511;
+        UPDATE_REG(0x14, lcd.bg[1].hofs);
         break;
     case 0x16:
-        BG1VOFS = value & 511;
-        UPDATE_REG(0x16, BG1VOFS);
-        LCDUpdateBGVOFS(1, BG1VOFS);
+        lcd.bg[1].vofs = value & 511;
+        UPDATE_REG(0x16, lcd.bg[1].vofs);
         break;
     case 0x18:
-        BG2HOFS = value & 511;
-        UPDATE_REG(0x18, BG2HOFS);
-        LCDUpdateBGHOFS(2, BG2HOFS);
+        lcd.bg[2].hofs = value & 511;
+        UPDATE_REG(0x18, lcd.bg[2].hofs);
         break;
     case 0x1A:
-        BG2VOFS = value & 511;
-        UPDATE_REG(0x1A, BG2VOFS);
-        LCDUpdateBGVOFS(2, BG2VOFS);
+        lcd.bg[2].vofs = value & 511;
+        UPDATE_REG(0x1A, lcd.bg[2].vofs);
         break;
     case 0x1C:
-        BG3HOFS = value & 511;
-        UPDATE_REG(0x1C, BG3HOFS);
-        LCDUpdateBGHOFS(3, BG3HOFS);
+        lcd.bg[3].hofs = value & 511;
+        UPDATE_REG(0x1C, lcd.bg[3].hofs);
         break;
     case 0x1E:
-        BG3VOFS = value & 511;
-        UPDATE_REG(0x1E, BG3VOFS);
-        LCDUpdateBGVOFS(3, BG3VOFS);
+        lcd.bg[3].vofs = value & 511;
+        UPDATE_REG(0x1E, lcd.bg[3].vofs);
         break;
     case 0x20:
         BG2PA = value;
+        lcd.bg[2].dx = value;
         UPDATE_REG(0x20, BG2PA);
-        LCDUpdateBGPA(2, BG2PA);
         break;
     case 0x22:
         BG2PB = value;
+        lcd.bg[2].dmx = value;
         UPDATE_REG(0x22, BG2PB);
-        LCDUpdateBGPB(2, BG2PB);
         break;
     case 0x24:
         BG2PC = value;
+        lcd.bg[2].dy = value;
         UPDATE_REG(0x24, BG2PC);
-        LCDUpdateBGPC(2, BG2PC);
         break;
     case 0x26:
         BG2PD = value;
+        lcd.bg[2].dmy = value;
         UPDATE_REG(0x26, BG2PD);
-        LCDUpdateBGPD(2, BG2PD);
         break;
     case 0x28:
         BG2X_L = value;
@@ -167,23 +159,23 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         break;
     case 0x30:
         BG3PA = value;
+        lcd.bg[3].dx = value;
         UPDATE_REG(0x30, BG3PA);
-        LCDUpdateBGPA(3, BG3PA);
         break;
     case 0x32:
         BG3PB = value;
+        lcd.bg[3].dmx = value;
         UPDATE_REG(0x32, BG3PB);
-        LCDUpdateBGPB(3, BG3PB);
         break;
     case 0x34:
         BG3PC = value;
+        lcd.bg[3].dy = value;
         UPDATE_REG(0x34, BG3PC);
-        LCDUpdateBGPC(3, BG3PC);
         break;
     case 0x36:
         BG3PD = value;
+        lcd.bg[3].dmy = value;
         UPDATE_REG(0x36, BG3PD);
-        LCDUpdateBGPD(3, BG3PD);
         break;
     case 0x38:
         BG3X_L = value;
@@ -206,48 +198,48 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         LCDUpdateBGY_H(3, BG3Y_H);
         break;
     case 0x40:
-        WIN0H = value;
-        UPDATE_REG(0x40, WIN0H);
+        lcd.winh[0] = value;
+        UPDATE_REG(0x40, lcd.winh[0]);
         LCDUpdateWindow0();
         break;
     case 0x42:
-        WIN1H = value;
-        UPDATE_REG(0x42, WIN1H);
+        lcd.winh[1] = value;
+        UPDATE_REG(0x42, lcd.winh[1]);
         LCDUpdateWindow1();
         break;
     case 0x44:
-        WIN0V = value;
-        UPDATE_REG(0x44, WIN0V);
+        lcd.winv[0] = value;
+        UPDATE_REG(0x44, lcd.winv[0]);
         break;
     case 0x46:
-        WIN1V = value;
-        UPDATE_REG(0x46, WIN1V);
+        lcd.winv[1] = value;
+        UPDATE_REG(0x46, lcd.winv[1]);
         break;
     case 0x48:
-        WININ = value & 0x3F3F;
-        UPDATE_REG(0x48, WININ);
+        lcd.winin = value & 0x3F3F;
+        UPDATE_REG(0x48, lcd.winin);
         break;
     case 0x4A:
-        WINOUT = value & 0x3F3F;
-        UPDATE_REG(0x4A, WINOUT);
+        lcd.winout = value & 0x3F3F;
+        UPDATE_REG(0x4A, lcd.winout);
         break;
     case 0x4C:
-        MOSAIC = value;
-        UPDATE_REG(0x4C, MOSAIC);
+        lcd.mosaic = value;
+        UPDATE_REG(0x4C, lcd.mosaic);
         break;
     case 0x50:
-        BLDMOD = value & 0x3FFF;
-        UPDATE_REG(0x50, BLDMOD);
-        fxOn = ((BLDMOD >> 6) & 3) != 0;
+        lcd.bldcnt = value & 0x3FFF;
+        UPDATE_REG(0x50, lcd.bldcnt);
+        fxOn = ((lcd.bldcnt >> 6) & 3) != 0;
         CPUUpdateRender();
         break;
     case 0x52:
-        COLEV = value & 0x1F1F;
-        UPDATE_REG(0x52, COLEV);
+        lcd.bldalpha = value & 0x1F1F;
+        UPDATE_REG(0x52, lcd.bldalpha);
         break;
     case 0x54:
-        COLY = value & 0x1F;
-        UPDATE_REG(0x54, COLY);
+        lcd.bldy = value & 0x1F;
+        UPDATE_REG(0x54, lcd.bldy);
         break;
     case 0x60:
     case 0x62:
@@ -263,7 +255,7 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
     case 0x84:
         soundEvent8(address & 0xFF, (uint8_t)(value & 0xFF));
         soundEvent8((address & 0xFF) + 1, (uint8_t)(value >> 8));
-        break;
+        return;
     case 0x82:
     case 0x88:
     case 0xa0:
@@ -279,7 +271,7 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
     case 0x9c:
     case 0x9e:
         soundEvent16(address & 0xFF, value);
-        break;
+        return;
     case 0xB0:
         DM0SAD_L = value;
         UPDATE_REG(0xB0, DM0SAD_L);
@@ -625,7 +617,7 @@ uint32_t CPUReadMemory(uint32_t address)
       case 6:
       {
          uint32_t vram_addr = (address & 0x1FFFC);
-         if (((DISPCNT & 7) > 2) && ((address & 0x1C000) == 0x18000))
+         if (((lcd.dispcnt & 7) > 2) && ((address & 0x1C000) == 0x18000))
          {
             return 0;
          }
@@ -762,7 +754,7 @@ uint32_t CPUReadHalfWord(uint32_t address)
       case 6:
       {
          uint32_t vram_addr = (address & 0x1FFFE);
-         if (((DISPCNT & 7) > 2) && ((address & 0x1C000) == 0x18000))
+         if (((lcd.dispcnt & 7) > 2) && ((address & 0x1C000) == 0x18000))
          {
             value = 0;
             break;
@@ -874,7 +866,7 @@ uint8_t CPUReadByte(uint32_t address)
          return paletteRAM[address & 0x3FF];
       case 6:
          address = (address & 0x1FFFF);
-         if (((DISPCNT & 7) > 2) && ((address & 0x1C000) == 0x18000))
+         if (((lcd.dispcnt & 7) > 2) && ((address & 0x1C000) == 0x18000))
          {
             return 0;
          }
@@ -963,7 +955,7 @@ void CPUWriteMemory(uint32_t address, uint32_t value)
          break;
       case 0x06:
          address = (address & 0x1FFFC);
-         if (((DISPCNT & 7) > 2) && ((address & 0x1C000) == 0x18000))
+         if (((lcd.dispcnt & 7) > 2) && ((address & 0x1C000) == 0x18000))
          {
             return;
          }
@@ -1013,7 +1005,7 @@ void CPUWriteHalfWord(uint32_t address, uint16_t value)
          break;
       case 6:
          address = (address & 0x1FFFE);
-         if (((DISPCNT & 7) > 2) && ((address & 0x1C000) == 0x18000))
+         if (((lcd.dispcnt & 7) > 2) && ((address & 0x1C000) == 0x18000))
          {
             return;
          }
@@ -1141,7 +1133,7 @@ void CPUWriteByte(uint32_t address, uint8_t value)
          break;
       case 6:
          address = (address & 0x1FFFE);
-         if (((DISPCNT & 7) > 2) && ((address & 0x1C000) == 0x18000))
+         if (((lcd.dispcnt & 7) > 2) && ((address & 0x1C000) == 0x18000))
          {
             return;
          }
@@ -1151,7 +1143,7 @@ void CPUWriteByte(uint32_t address, uint8_t value)
          }
          // no need to switch
          // byte writes to OBJ VRAM are ignored
-         if ((address) < objTilesAddress[((DISPCNT & 7) + 1) >> 2])
+         if ((address) < objTilesAddress[((lcd.dispcnt & 7) + 1) >> 2])
          {
             WRITE16LE(vram + address, (value << 8) | value);
          }
