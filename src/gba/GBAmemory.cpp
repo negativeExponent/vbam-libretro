@@ -23,348 +23,310 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
    }*/
 
     switch (address) {
-    case 0x00: {
-        if ((value & 7) <= 5) {
+    case REG_DISPCNT: {
+        if ((value & 7) > 5) {
             // display modes above 0-5 are prohibited
             lcd.dispcnt = (value & 7);
-        } else log("Invalid display mode: %d\n",value & 7);
+        }
+
         bool change = (0 != ((lcd.dispcnt ^ value) & 0x80));
         bool changeBG = (0 != ((lcd.dispcnt ^ value) & 0x0F00));
         uint16_t changeBGon = ((~lcd.dispcnt) & value) & 0x0F00; // these layers are being activated
 
-        lcd.dispcnt = (value & 0xFFF7); // bit 3 can only be accessed by the BIOS to enable GBC mode
-        UPDATE_REG(0x00, lcd.dispcnt);
+        value &= 0xFFF7; // bit 3 can only be accessed by the BIOS to enable GBC mode
+        lcd.dispcnt = value;
+        layerEnable = (layerSettings & value);
 
         if (changeBGon) {
             layerEnableDelay = 4;
-            layerEnable = layerSettings & value & (~changeBGon);
-        } else {
-            layerEnable = layerSettings & value;
-            // CPUUpdateTicks();
+            layerEnable = (layerSettings & value & (~changeBGon));
         }
 
         windowOn = (layerEnable & 0x6000) ? true : false;
-        if (change && !((value & 0x80))) {
+
+        if (change && !(value & 0x80)) {
             if (!(lcd.dispstat & 1)) {
                 lcd.dispstat &= 0xFFFC;
-                UPDATE_REG(0x04, lcd.dispstat);
+                UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                 CPUCompareVCOUNT();
             }
         }
+
         CPUUpdateRender();
+
         // we only care about changes in BG0-BG3
         if (changeBG) {
             CPUUpdateRenderBuffers(false);
         }
         break;
     }
-    case 0x04:
-        lcd.dispstat = (value & 0xFF38) | (lcd.dispstat & 7);
-        UPDATE_REG(0x04, lcd.dispstat);
+    case REG_DISPSTAT:
+        value &= 0xFF38;
+        value |= (lcd.dispstat & 7);
+        lcd.dispstat = value;
         break;
-    case 0x06:
-        // lcd.vcount, not writable
+    case REG_VCOUNT:
+        // not writable
         break;
-    case 0x08:
-        BG0CNT = (value & 0xDFFF);
-        UPDATE_REG(0x08, BG0CNT);
-        LCDUpdateBGCNT(0, BG0CNT);
+    case REG_BG0CNT:
+        value &= 0xDFFF;
+        LCDUpdateBGCNT(0, value);
         break;
-    case 0x0A:
-        BG1CNT = (value & 0xDFFF);
-        UPDATE_REG(0x0A, BG1CNT);
-        LCDUpdateBGCNT(1, BG1CNT);
+    case REG_BG1CNT:
+        value &= 0xDFFF;
+        LCDUpdateBGCNT(1, value);
         break;
-    case 0x0C:
-        BG2CNT = (value & 0xFFFF);
-        UPDATE_REG(0x0C, BG2CNT);
-        LCDUpdateBGCNT(2, BG2CNT);
+    case REG_BG2CNT:
+        value &= 0xFFFF;
+        LCDUpdateBGCNT(2, value);
         break;
-    case 0x0E:
-        BG3CNT = (value & 0xFFFF);
-        UPDATE_REG(0x0E, BG3CNT);
-        LCDUpdateBGCNT(3, BG3CNT);
+    case REG_BG3CNT:
+        value &= 0xFFFF;
+        LCDUpdateBGCNT(3, value);
         break;
-    case 0x10:
-        lcd.bg[0].hofs = value & 511;
-        UPDATE_REG(0x10, lcd.bg[0].hofs);
+    case REG_BG0HOFS:
+        value &= 0x1FF;
+        lcd.bg[0].hofs = value;
         break;
-    case 0x12:
-        lcd.bg[0].vofs = value & 511;
-        UPDATE_REG(0x12, lcd.bg[0].vofs);
+    case REG_BG0VOFS:
+        value &= 0x1FF;
+        lcd.bg[0].vofs = value;
         break;
-    case 0x14:
-        lcd.bg[1].hofs = value & 511;
-        UPDATE_REG(0x14, lcd.bg[1].hofs);
+    case REG_BG1HOFS:
+        value &= 0x1FF;
+        lcd.bg[1].hofs = value;
         break;
-    case 0x16:
-        lcd.bg[1].vofs = value & 511;
-        UPDATE_REG(0x16, lcd.bg[1].vofs);
+    case REG_BG1VOFS:
+        value &= 0x1FF;
+        lcd.bg[1].vofs = value;
         break;
-    case 0x18:
-        lcd.bg[2].hofs = value & 511;
-        UPDATE_REG(0x18, lcd.bg[2].hofs);
+    case REG_BG2HOFS:
+        value &= 0x1FF;
+        lcd.bg[2].hofs = value;
         break;
-    case 0x1A:
-        lcd.bg[2].vofs = value & 511;
-        UPDATE_REG(0x1A, lcd.bg[2].vofs);
+    case REG_BG2VOFS:
+        value &= 0x1FF;
+        lcd.bg[2].vofs = value;
         break;
-    case 0x1C:
-        lcd.bg[3].hofs = value & 511;
-        UPDATE_REG(0x1C, lcd.bg[3].hofs);
+    case REG_BG3HOFS:
+        value &= 0x1FF;
+        lcd.bg[3].hofs = value;
         break;
-    case 0x1E:
-        lcd.bg[3].vofs = value & 511;
-        UPDATE_REG(0x1E, lcd.bg[3].vofs);
+    case REG_BG3VOFS:
+        value &= 0x1FF;
+        lcd.bg[3].vofs = value;
         break;
-    case 0x20:
-        BG2PA = value;
+    case REG_BG2PA:
         lcd.bg[2].dx = value;
-        UPDATE_REG(0x20, BG2PA);
         break;
-    case 0x22:
-        BG2PB = value;
+    case REG_BG2PB:
         lcd.bg[2].dmx = value;
-        UPDATE_REG(0x22, BG2PB);
         break;
-    case 0x24:
-        BG2PC = value;
+    case REG_BG2PC:
         lcd.bg[2].dy = value;
-        UPDATE_REG(0x24, BG2PC);
         break;
-    case 0x26:
-        BG2PD = value;
+    case REG_BG2PD:
         lcd.bg[2].dmy = value;
-        UPDATE_REG(0x26, BG2PD);
         break;
-    case 0x28:
-        BG2X_L = value;
-        UPDATE_REG(0x28, BG2X_L);
-        LCDUpdateBGX_L(2, BG2X_L);
+    case REG_BG2X_L:
+        LCDUpdateBGX_L(2, value);
         break;
-    case 0x2A:
-        BG2X_H = (value & 0xFFF);
-        UPDATE_REG(0x2A, BG2X_H);
-        LCDUpdateBGX_H(2, BG2X_H);
+    case REG_BG2X_H:
+        value &= 0x0FFF;
+        LCDUpdateBGX_H(2, value);
         break;
-    case 0x2C:
-        BG2Y_L = value;
-        UPDATE_REG(0x2C, BG2Y_L);
-        LCDUpdateBGY_L(2, BG2Y_L);
+    case REG_BG2Y_L:
+        LCDUpdateBGY_L(2, value);
         break;
-    case 0x2E:
-        BG2Y_H = value & 0xFFF;
-        UPDATE_REG(0x2E, BG2Y_H);
-        LCDUpdateBGY_H(2, BG2Y_H);
+    case REG_BG2Y_H:
+        value &= 0x0FFF;
+        LCDUpdateBGY_H(2, value);
         break;
-    case 0x30:
-        BG3PA = value;
+    case REG_BG3PA:
         lcd.bg[3].dx = value;
-        UPDATE_REG(0x30, BG3PA);
         break;
-    case 0x32:
-        BG3PB = value;
+    case REG_BG3PB:
         lcd.bg[3].dmx = value;
-        UPDATE_REG(0x32, BG3PB);
         break;
-    case 0x34:
-        BG3PC = value;
+    case REG_BG3PC:
         lcd.bg[3].dy = value;
-        UPDATE_REG(0x34, BG3PC);
         break;
-    case 0x36:
-        BG3PD = value;
+    case REG_BG3PD:
         lcd.bg[3].dmy = value;
-        UPDATE_REG(0x36, BG3PD);
         break;
-    case 0x38:
-        BG3X_L = value;
-        UPDATE_REG(0x38, BG3X_L);
-        LCDUpdateBGX_L(3, BG3X_L);
+    case REG_BG3X_L:
+        LCDUpdateBGX_L(3, value);
         break;
-    case 0x3A:
-        BG3X_H = value & 0xFFF;
-        UPDATE_REG(0x3A, BG3X_H);
-        LCDUpdateBGX_H(3, BG3X_H);
+    case REG_BG3X_H:
+        value &= 0x0FFF;
+        LCDUpdateBGX_H(3, value);
         break;
-    case 0x3C:
-        BG3Y_L = value;
-        UPDATE_REG(0x3C, BG3Y_L);
-        LCDUpdateBGY_L(3, BG3Y_L);
+    case REG_BG3Y_L:
+        LCDUpdateBGY_L(3, value);
         break;
-    case 0x3E:
-        BG3Y_H = value & 0xFFF;
-        UPDATE_REG(0x3E, BG3Y_H);
-        LCDUpdateBGY_H(3, BG3Y_H);
+    case REG_BG3Y_H:
+        value &= 0x0FFF;
+        LCDUpdateBGY_H(3, value);
         break;
-    case 0x40:
+    case REG_WIN0H:
         lcd.winh[0] = value;
-        UPDATE_REG(0x40, lcd.winh[0]);
         LCDUpdateWindow0();
         break;
-    case 0x42:
+    case REG_WIN1H:
         lcd.winh[1] = value;
-        UPDATE_REG(0x42, lcd.winh[1]);
         LCDUpdateWindow1();
         break;
-    case 0x44:
+    case REG_WIN0V:
         lcd.winv[0] = value;
-        UPDATE_REG(0x44, lcd.winv[0]);
         break;
-    case 0x46:
+    case REG_WIN1V:
         lcd.winv[1] = value;
-        UPDATE_REG(0x46, lcd.winv[1]);
         break;
-    case 0x48:
-        lcd.winin = value & 0x3F3F;
-        UPDATE_REG(0x48, lcd.winin);
+    case REG_WININ:
+        value &= 0x3F3F;
+        lcd.winin = value;
         break;
-    case 0x4A:
-        lcd.winout = value & 0x3F3F;
-        UPDATE_REG(0x4A, lcd.winout);
+    case REG_WINOUT:
+        value &= 0x3F3F;
+        lcd.winout = value;
         break;
-    case 0x4C:
+    case REG_MOSAIC:
         lcd.mosaic = value;
-        UPDATE_REG(0x4C, lcd.mosaic);
         break;
-    case 0x50:
-        lcd.bldcnt = value & 0x3FFF;
-        UPDATE_REG(0x50, lcd.bldcnt);
+    case REG_BLDCNT:
+        value &= 0x3FFF;
+        lcd.bldcnt = value;
         fxOn = ((lcd.bldcnt >> 6) & 3) != 0;
         CPUUpdateRender();
         break;
-    case 0x52:
-        lcd.bldalpha = value & 0x1F1F;
-        UPDATE_REG(0x52, lcd.bldalpha);
+    case REG_BLDALPHA:
+        value &= 0x1F1F;
+        lcd.bldalpha = value;
         break;
-    case 0x54:
-        lcd.bldy = value & 0x1F;
-        UPDATE_REG(0x54, lcd.bldy);
+    case REG_BLDY:
+        value &= 0x1F;
+        lcd.bldy = value;
         break;
-    case 0x60:
-    case 0x62:
-    case 0x64:
-    case 0x68:
-    case 0x6c:
-    case 0x70:
-    case 0x72:
-    case 0x74:
-    case 0x78:
-    case 0x7c:
-    case 0x80:
-    case 0x84:
+
+    case REG_SOUND1CNT_L:
+    case REG_SOUND1CNT_H:
+    case REG_SOUND1CNT_X:
+    case REG_SOUND2CNT_L:
+    case REG_SOUND2CNT_H:
+    case REG_SOUND3CNT_L:
+    case REG_SOUND3CNT_H:
+    case REG_SOUND3CNT_X:
+    case REG_SOUND4CNT_L:
+    case REG_SOUND4CNT_H:
+    case REG_SOUNDCNT_L:
+    case REG_SOUNDCNT_X:
         soundEvent8(address & 0xFF, (uint8_t)(value & 0xFF));
         soundEvent8((address & 0xFF) + 1, (uint8_t)(value >> 8));
         return;
-    case 0x82:
-    case 0x88:
-    case 0xa0:
-    case 0xa2:
-    case 0xa4:
-    case 0xa6:
-    case 0x90:
-    case 0x92:
-    case 0x94:
-    case 0x96:
-    case 0x98:
-    case 0x9a:
-    case 0x9c:
-    case 0x9e:
+    case REG_SOUNDCNT_H:
+    case REG_SOUNDBIAS:
+    case REG_FIFO_A_L:
+    case REG_FIFO_A_H:
+    case REG_FIFO_B_L:
+    case REG_FIFO_B_H:
+    case REG_WAVE_RAM:
+    case REG_WAVE_RAM + 0x2:
+    case REG_WAVE_RAM + 0x4:
+    case REG_WAVE_RAM + 0x6:
+    case REG_WAVE_RAM + 0x8:
+    case REG_WAVE_RAM + 0xA:
+    case REG_WAVE_RAM + 0xC:
+    case REG_WAVE_RAM + 0xE:
         soundEvent16(address & 0xFF, value);
         return;
-    case 0xB0:
+
+    case REG_DMA0SAD_L:
         DM0SAD_L = value;
-        UPDATE_REG(0xB0, DM0SAD_L);
         break;
-    case 0xB2:
-        DM0SAD_H = value & 0x07FF;
-        UPDATE_REG(0xB2, DM0SAD_H);
+    case REG_DMA0SAD_H:
+        value &= 0x07FF;
+        DM0SAD_H = value;
         break;
-    case 0xB4:
+    case REG_DMA0DAD_L:
         DM0DAD_L = value;
-        UPDATE_REG(0xB4, DM0DAD_L);
         break;
-    case 0xB6:
-        DM0DAD_H = value & 0x07FF;
-        UPDATE_REG(0xB6, DM0DAD_H);
+    case REG_DMA0DAD_H:
+        value &= 0x07FF;
+        DM0DAD_H = value;
         break;
-    case 0xB8:
+    case REG_DMA0CNT_L:
         DM0CNT_L = value & 0x3FFF;
-        UPDATE_REG(0xB8, 0);
+        value = 0;
         break;
-    case 0xBA: {
+    case REG_DMA0CNT_H: {
         bool start = ((DM0CNT_H ^ value) & 0x8000) ? true : false;
         value &= 0xF7E0;
 
         DM0CNT_H = value;
-        UPDATE_REG(0xBA, DM0CNT_H);
+        UPDATE_REG(REG_DMA0CNT_H, DM0CNT_H);
 
         if (start && (value & 0x8000)) {
             dma[0].Source = DM0SAD_L | (DM0SAD_H << 16);
             dma[0].Dest = DM0DAD_L | (DM0DAD_H << 16);
             CPUCheckDMA(0, 1);
         }
-    } break;
-    case 0xBC:
+    } return;
+    case REG_DMA1SAD_L:
         DM1SAD_L = value;
-        UPDATE_REG(0xBC, DM1SAD_L);
         break;
-    case 0xBE:
-        DM1SAD_H = value & 0x0FFF;
-        UPDATE_REG(0xBE, DM1SAD_H);
+    case REG_DMA1SAD_H:
+        value &= 0x0FFF;
+        DM1SAD_H = value;
         break;
-    case 0xC0:
+    case REG_DMA1DAD_L:
         DM1DAD_L = value;
-        UPDATE_REG(0xC0, DM1DAD_L);
         break;
-    case 0xC2:
-        DM1DAD_H = value & 0x07FF;
-        UPDATE_REG(0xC2, DM1DAD_H);
+    case REG_DMA1DAD_H:
+        value &= 0x07FF;
+        DM1DAD_H = value;
         break;
-    case 0xC4:
+    case REG_DMA1CNT_L:
         DM1CNT_L = value & 0x3FFF;
-        UPDATE_REG(0xC4, 0);
+        value = 0;
         break;
-    case 0xC6: {
+    case REG_DMA1CNT_H: {
         bool start = ((DM1CNT_H ^ value) & 0x8000) ? true : false;
         value &= 0xF7E0;
 
         DM1CNT_H = value;
-        UPDATE_REG(0xC6, DM1CNT_H);
+        UPDATE_REG(REG_DMA1CNT_H, DM1CNT_H);
 
         if (start && (value & 0x8000)) {
             dma[1].Source = DM1SAD_L | (DM1SAD_H << 16);
             dma[1].Dest = DM1DAD_L | (DM1DAD_H << 16);
             CPUCheckDMA(0, 2);
         }
-    } break;
-    case 0xC8:
+    } return;
+    case REG_DMA2SAD_L:
         DM2SAD_L = value;
-        UPDATE_REG(0xC8, DM2SAD_L);
         break;
-    case 0xCA:
-        DM2SAD_H = value & 0x0FFF;
-        UPDATE_REG(0xCA, DM2SAD_H);
+    case REG_DMA2SAD_H:
+        value &= 0x0FFF;
+        DM2SAD_H = value;
         break;
-    case 0xCC:
+    case REG_DMA2DAD_L:
         DM2DAD_L = value;
-        UPDATE_REG(0xCC, DM2DAD_L);
         break;
-    case 0xCE:
-        DM2DAD_H = value & 0x07FF;
-        UPDATE_REG(0xCE, DM2DAD_H);
+    case REG_DMA2DAD_H:
+        value &= 0x07FF;
+        DM2DAD_H = value;
         break;
-    case 0xD0:
+    case REG_DMA2CNT_L:
         DM2CNT_L = value & 0x3FFF;
-        UPDATE_REG(0xD0, 0);
+        value = 0;
         break;
-    case 0xD2: {
+    case REG_DMA2CNT_H: {
         bool start = ((DM2CNT_H ^ value) & 0x8000) ? true : false;
 
         value &= 0xF7E0;
 
         DM2CNT_H = value;
-        UPDATE_REG(0xD2, DM2CNT_H);
+        UPDATE_REG(REG_DMA2CNT_H, DM2CNT_H);
 
         if (start && (value & 0x8000)) {
             dma[2].Source = DM2SAD_L | (DM2SAD_H << 16);
@@ -372,78 +334,77 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
 
             CPUCheckDMA(0, 4);
         }
-    } break;
-    case 0xD4:
+    } return;
+    case REG_DMA3SAD_L:
         DM3SAD_L = value;
-        UPDATE_REG(0xD4, DM3SAD_L);
         break;
-    case 0xD6:
-        DM3SAD_H = value & 0x0FFF;
-        UPDATE_REG(0xD6, DM3SAD_H);
+    case REG_DMA3SAD_H:
+        value &= 0x0FFF;
+        DM3SAD_H = value;
         break;
-    case 0xD8:
+    case REG_DMA3DAD_L:
         DM3DAD_L = value;
-        UPDATE_REG(0xD8, DM3DAD_L);
         break;
-    case 0xDA:
-        DM3DAD_H = value & 0x0FFF;
-        UPDATE_REG(0xDA, DM3DAD_H);
+    case REG_DMA3DAD_H:
+        value &= 0x0FFF;
+        DM3DAD_H = value;
         break;
-    case 0xDC:
+    case REG_DMA3CNT_L:
         DM3CNT_L = value;
-        UPDATE_REG(0xDC, 0);
+        value = 0;
         break;
-    case 0xDE: {
+    case REG_DMA3CNT_H: {
         bool start = ((DM3CNT_H ^ value) & 0x8000) ? true : false;
 
         value &= 0xFFE0;
 
         DM3CNT_H = value;
-        UPDATE_REG(0xDE, DM3CNT_H);
+        UPDATE_REG(REG_DMA3CNT_H, value);
 
         if (start && (value & 0x8000)) {
             dma[3].Source = DM3SAD_L | (DM3SAD_H << 16);
             dma[3].Dest = DM3DAD_L | (DM3DAD_H << 16);
             CPUCheckDMA(0, 8);
         }
-    } break;
-    case 0x100:
+    } return;
+
+    case REG_TM0CNT_L:
         timers.tm[0].Reload = value;
         interp_rate();
-        break;
-    case 0x102:
+        return;
+    case REG_TM0CNT_H:
         timers.tm[0].Value = value;
         timers.OnOffDelay |= 1;
         cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x104:
+        return;
+    case REG_TM1CNT_L:
         timers.tm[1].Reload = value;
         interp_rate();
-        break;
-    case 0x106:
+        return;
+    case REG_TM1CNT_H:
         timers.tm[1].Value = value;
         timers.OnOffDelay |= 2;
         cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x108:
+        return;
+    case REG_TM2CNT_L:
         timers.tm[2].Reload = value;
-        break;
-    case 0x10A:
+        return;
+    case REG_TM2CNT_H:
         timers.tm[2].Value = value;
         timers.OnOffDelay |= 4;
         cpuNextEvent = cpuTotalTicks;
-        break;
-    case 0x10C:
+        return;
+    case REG_TM3CNT_L:
         timers.tm[3].Reload = value;
-        break;
-    case 0x10E:
+        return;
+    case REG_TM3CNT_H:
         timers.tm[3].Value = value;
         timers.OnOffDelay |= 8;
         cpuNextEvent = cpuTotalTicks;
-        break;
+        return;
 
 #ifndef NO_LINK
-    case COMM_SIOCNT:
+    /*case COMM_SIOCNT:
         StartLink(value);
         break;
 
@@ -488,28 +449,29 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
 
     case COMM_JOYSTAT:
         UPDATE_REG(COMM_JOYSTAT, (READ16LE(&ioMem[COMM_JOYSTAT]) & 0x0a) | (value & ~0x0a));
-        break;
+        break;*/
 #endif
 
-    case 0x130:
-        P1 |= (value & 0x3FF);
-        UPDATE_REG(0x130, P1);
+    case REG_KEYINPUT:
+        value &= 0x3FF;
+        value |= P1;
+        P1 = value;
         break;
 
-    case 0x132:
-        UPDATE_REG(0x132, value & 0xC3FF);
+    case REG_KEYCNT:
+        value &= 0xC3FF;
         break;
-    case 0x200:
-        IE = value & 0x3FFF;
-        UPDATE_REG(0x200, IE);
+    case REG_IE:
+        value &= 0x3FFF;
+        IE = value;
         if ((IME & 1) && (IF & IE) && armIrqEnable)
             cpuNextEvent = cpuTotalTicks;
         break;
-    case 0x202:
+    case REG_IF:
         IF ^= (value & IF);
-        UPDATE_REG(0x202, IF);
+        value = IF;
         break;
-    case 0x204: {
+    case REG_WAITCNT: {
         memoryWait[0x0e] = memoryWaitSeq[0x0e] = gamepakRamWaitState[value & 3];
 
         memoryWait[0x08] = memoryWait[0x09] = gamepakWaitState[(value >> 2) & 3];
@@ -535,24 +497,21 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
             busPrefetch = false;
             busPrefetchCount = 0;
         }
-        UPDATE_REG(0x204, value & 0x7FFF);
-
+        value &= 0x7FFF;
     } break;
-    case 0x208:
-        IME = value & 1;
-        UPDATE_REG(0x208, IME);
+    case REG_IME:
+        value &= 1;
+        IME = value;
         if ((IME & 1) && (IF & IE) && armIrqEnable)
             cpuNextEvent = cpuTotalTicks;
         break;
-    case 0x300:
+    case REG_POSTFLG:
         if (value != 0)
             value &= 0xFFFE;
-        UPDATE_REG(0x300, value);
-        break;
-    default:
-        UPDATE_REG(address & 0x3FE, value);
         break;
     }
+
+    UPDATE_REG(address & 0x3FE, value);
 }
 
 static inline uint32_t ROR(uint32_t value, uint32_t shift)

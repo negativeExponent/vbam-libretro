@@ -1743,10 +1743,10 @@ void LCDResetBGRegisters()
 
 void LCDUpdateBGRegisters()
 {
-   LCDUpdateBGCNT(0, BG0CNT);
-   LCDUpdateBGCNT(1, BG1CNT);
-   LCDUpdateBGCNT(2, BG2CNT);
-   LCDUpdateBGCNT(3, BG3CNT);
+   LCDUpdateBGCNT(0, READ16LE((uint16_t*)&ioMem[REG_BG0CNT]));
+   LCDUpdateBGCNT(1, READ16LE((uint16_t*)&ioMem[REG_BG1CNT]));
+   LCDUpdateBGCNT(2, READ16LE((uint16_t*)&ioMem[REG_BG2CNT]));
+   LCDUpdateBGCNT(3, READ16LE((uint16_t*)&ioMem[REG_BG3CNT]));
 }
 
 #define RENDERLINE(MODE)                                              \
@@ -1756,12 +1756,16 @@ void LCDUpdateBGRegisters()
 
 void gfxDrawScanline(pixFormat* dest, int renderer_mode, int renderer_type)
 {
+   /*log("drawScanline: Mode = %d Type = %d scanline = %3d\n",
+      renderer_mode, renderer_type, lcd.vcount);*/
+
    if (lcd.dispcnt & 0x80) // Force Blank
    {
       // draw white
       forceBlankLine(dest);
       return;
    }
+
    if (lcd.vcount == 0)
    {
       lcd.bg[2].x_pos = lcd.bg[2].x_ref;
@@ -1769,10 +1773,11 @@ void gfxDrawScanline(pixFormat* dest, int renderer_mode, int renderer_type)
       lcd.bg[3].x_pos = lcd.bg[3].x_ref;
       lcd.bg[3].y_pos = lcd.bg[3].y_ref;
    }
-   // Draw scanline pix to screen buffer
+
    gfxDrawSprites();
    if (renderer_type == 2)
       gfxDrawOBJWin();
+
    switch (renderer_mode)
    {
       case 0:
@@ -1806,6 +1811,7 @@ void gfxDrawScanline(pixFormat* dest, int renderer_mode, int renderer_type)
          RENDERLINE(5);
          break;
    }
+
    if ((lcd.dispcnt & 7) != 0)
    {
       if (layerEnable & 0x0400)

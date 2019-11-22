@@ -125,7 +125,7 @@ void StartLink(uint16_t siocnt)
         {
             UPDATE_REG(COMM_SIOCNT, 0xFF);
             IF |= 0x80;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
             siocnt &= 0x7f7f;
         }
     }

@@ -269,15 +269,22 @@ uint32_t myROM[] = {
    0x03007FE0
 };
 
+static uint16_t dummy_state_u16;
+
+#define SKIP_u16(name      )              \
+   {                                      \
+       &dummy_state_u16, sizeof(uint16_t) \
+   }
+
 variable_desc saveGameStruct[] = {
    // IO:LCD
    { &lcd.dispcnt, sizeof(uint16_t) },
    { &lcd.dispstat, sizeof(uint16_t) },
    { &lcd.vcount, sizeof(uint16_t) },
-   { &BG0CNT, sizeof(uint16_t) },
-   { &BG1CNT, sizeof(uint16_t) },
-   { &BG2CNT, sizeof(uint16_t) },
-   { &BG3CNT, sizeof(uint16_t) },
+   SKIP_u16(BG0CNT),
+   SKIP_u16(BG1CNT),
+   SKIP_u16(BG2CNT),
+   SKIP_u16(BG3CNT),
    { &lcd.bg[0].hofs, sizeof(uint16_t) },
    { &lcd.bg[0].vofs, sizeof(uint16_t) },
    { &lcd.bg[1].hofs, sizeof(uint16_t) },
@@ -1285,18 +1292,18 @@ void CPUCompareVCOUNT(void)
    if (lcd.vcount == (lcd.dispstat >> 8))
    {
       lcd.dispstat |= 4;
-      UPDATE_REG(0x04, lcd.dispstat);
+      UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
 
       if (lcd.dispstat & 0x20)
       {
          IF |= 4;
-         UPDATE_REG(0x202, IF);
+         UPDATE_REG(REG_IF, IF);
       }
    }
    else
    {
       lcd.dispstat &= 0xFFFB;
-      UPDATE_REG(0x4, lcd.dispstat);
+      UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
    }
    if (layerEnableDelay > 0)
    {
@@ -1447,7 +1454,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (DM0CNT_H & 0x4000)
          {
             IF |= 0x0100;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
             cpuNextEvent = cpuTotalTicks;
          }
 
@@ -1459,7 +1466,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (!(DM0CNT_H & 0x0200) || (reason == 0))
          {
             DM0CNT_H &= 0x7FFF;
-            UPDATE_REG(0xBA, DM0CNT_H);
+            UPDATE_REG(REG_DMA0CNT_H, DM0CNT_H);
          }
       }
    }
@@ -1527,7 +1534,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (DM1CNT_H & 0x4000)
          {
             IF |= 0x0200;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
             cpuNextEvent = cpuTotalTicks;
          }
 
@@ -1539,7 +1546,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (!(DM1CNT_H & 0x0200) || (reason == 0))
          {
             DM1CNT_H &= 0x7FFF;
-            UPDATE_REG(0xC6, DM1CNT_H);
+            UPDATE_REG(REG_DMA1CNT_H, DM1CNT_H);
          }
       }
    }
@@ -1608,7 +1615,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (DM2CNT_H & 0x4000)
          {
             IF |= 0x0400;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
             cpuNextEvent = cpuTotalTicks;
          }
 
@@ -1620,7 +1627,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (!(DM2CNT_H & 0x0200) || (reason == 0))
          {
             DM2CNT_H &= 0x7FFF;
-            UPDATE_REG(0xD2, DM2CNT_H);
+            UPDATE_REG(REG_DMA2CNT_H, DM2CNT_H);
          }
       }
    }
@@ -1672,7 +1679,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (DM3CNT_H & 0x4000)
          {
             IF |= 0x0800;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
             cpuNextEvent = cpuTotalTicks;
          }
 
@@ -1684,7 +1691,7 @@ void CPUCheckDMA(int reason, int dmamask)
          if (!(DM3CNT_H & 0x0200) || (reason == 0))
          {
             DM3CNT_H &= 0x7FFF;
-            UPDATE_REG(0xDE, DM3CNT_H);
+            UPDATE_REG(REG_DMA3CNT_H, DM3CNT_H);
          }
       }
    }
@@ -1700,12 +1707,12 @@ void applyTimer()
          // reload the counter
          TM0D = timers.tm[0].Reload;
          timers.tm[0].Ticks = (0x10000 - TM0D) << timers.tm[0].ClockReload;
-         UPDATE_REG(0x100, TM0D);
+         UPDATE_REG(REG_TM0CNT_L, TM0D);
       }
       timers.tm[0].On = timers.tm[0].Value & 0x80 ? true : false;
       TM0CNT = timers.tm[0].Value & 0xC7;
       interp_rate();
-      UPDATE_REG(0x102, TM0CNT);
+      UPDATE_REG(REG_TM0CNT_H, TM0CNT);
       //    CPUUpdateTicks();
    }
    if (timers.OnOffDelay & 2)
@@ -1716,12 +1723,12 @@ void applyTimer()
          // reload the counter
          TM1D = timers.tm[1].Reload;
          timers.tm[1].Ticks = (0x10000 - TM1D) << timers.tm[1].ClockReload;
-         UPDATE_REG(0x104, TM1D);
+         UPDATE_REG(REG_TM1CNT_L, TM1D);
       }
       timers.tm[1].On = timers.tm[1].Value & 0x80 ? true : false;
       TM1CNT = timers.tm[1].Value & 0xC7;
       interp_rate();
-      UPDATE_REG(0x106, TM1CNT);
+      UPDATE_REG(REG_TM1CNT_H, TM1CNT);
    }
    if (timers.OnOffDelay & 4)
    {
@@ -1731,11 +1738,11 @@ void applyTimer()
          // reload the counter
          TM2D = timers.tm[2].Reload;
          timers.tm[2].Ticks = (0x10000 - TM2D) << timers.tm[2].ClockReload;
-         UPDATE_REG(0x108, TM2D);
+         UPDATE_REG(REG_TM2CNT_L, TM2D);
       }
       timers.tm[2].On = timers.tm[2].Value & 0x80 ? true : false;
       TM2CNT = timers.tm[2].Value & 0xC7;
-      UPDATE_REG(0x10A, TM2CNT);
+      UPDATE_REG(REG_TM2CNT_H, TM2CNT);
    }
    if (timers.OnOffDelay & 8)
    {
@@ -1745,11 +1752,11 @@ void applyTimer()
          // reload the counter
          TM3D = timers.tm[3].Reload;
          timers.tm[3].Ticks = (0x10000 - TM3D) << timers.tm[3].ClockReload;
-         UPDATE_REG(0x10C, TM3D);
+         UPDATE_REG(REG_TM3CNT_L, TM3D);
       }
       timers.tm[3].On = timers.tm[3].Value & 0x80 ? true : false;
       TM3CNT = timers.tm[3].Value & 0xC7;
-      UPDATE_REG(0x10E, TM3CNT);
+      UPDATE_REG(REG_TM3CNT_H, TM3CNT);
    }
    cpuNextEvent = CPUUpdateTicks();
    timers.OnOffDelay = 0;
@@ -1847,7 +1854,7 @@ void CPUInit(const char* biosFileName, bool useBiosFile)
       ioReadable[i] = false;
    for (i = 0x304; i < 0x400; i++)
       ioReadable[i] = false;
-
+   
    if (romSize < 0x1fe2000)
    {
       *((uint16_t*)&rom[0x1fe209c]) = 0xdffa; // SWI 0xFA
@@ -1932,47 +1939,15 @@ void CPUReset()
    // clean io memory
    memset(ioMem, 0, SIZE_IOMEM);
 
+   renderer.mode = 0;
+   renderer.type = 0;
+   fxOn = false;
+   windowOn = false;
+
+   // Reset IO Registers
+   LCDResetBGRegisters();
    lcd.dispcnt = 0x0080;
-   lcd.dispstat = 0x0000;
    lcd.vcount = (useBios && !skipBios) ? 0 : 0x007E;
-   BG0CNT = 0x0000;
-   BG1CNT = 0x0000;
-   BG2CNT = 0x0000;
-   BG3CNT = 0x0000;
-   lcd.bg[0].hofs = 0x0000;
-   lcd.bg[0].vofs = 0x0000;
-   lcd.bg[1].hofs = 0x0000;
-   lcd.bg[1].vofs = 0x0000;
-   lcd.bg[2].hofs = 0x0000;
-   lcd.bg[2].vofs = 0x0000;
-   lcd.bg[3].hofs = 0x0000;
-   lcd.bg[3].vofs = 0x0000;
-   BG2PA = 0x0100;
-   BG2PB = 0x0000;
-   BG2PC = 0x0000;
-   BG2PD = 0x0100;
-   BG2X_L = 0x0000;
-   BG2X_H = 0x0000;
-   BG2Y_L = 0x0000;
-   BG2Y_H = 0x0000;
-   BG3PA = 0x0100;
-   BG3PB = 0x0000;
-   BG3PC = 0x0000;
-   BG3PD = 0x0100;
-   BG3X_L = 0x0000;
-   BG3X_H = 0x0000;
-   BG3Y_L = 0x0000;
-   BG3Y_H = 0x0000;
-   lcd.winh[0] = 0x0000;
-   lcd.winh[1] = 0x0000;
-   lcd.winv[0] = 0x0000;
-   lcd.winv[1] = 0x0000;
-   lcd.winin = 0x0000;
-   lcd.winout = 0x0000;
-   lcd.mosaic = 0x0000;
-   lcd.bldcnt = 0x0000;
-   lcd.bldalpha = 0x0000;
-   lcd.bldy = 0x0000;
    DM0SAD_L = 0x0000;
    DM0SAD_H = 0x0000;
    DM0DAD_L = 0x0000;
@@ -2010,12 +1985,6 @@ void CPUReset()
    IF = 0x0000;
    IME = 0x0000;
 
-   LCDResetBGRegisters();
-   renderer.mode = 0;
-   renderer.type = 0;
-   fxOn = false;
-   windowOn = false;
-
    armMode = 0x1F;
 
    if (cpuIsMultiBoot)
@@ -2047,14 +2016,14 @@ void CPUReset()
    }
    armState = true;
    C_FLAG = V_FLAG = N_FLAG = Z_FLAG = false;
-   UPDATE_REG(0x00, lcd.dispcnt);
-   UPDATE_REG(0x06, lcd.vcount);
-   UPDATE_REG(0x20, BG2PA);
-   UPDATE_REG(0x26, BG2PD);
-   UPDATE_REG(0x30, BG3PA);
-   UPDATE_REG(0x36, BG3PD);
-   UPDATE_REG(0x130, P1);
-   UPDATE_REG(0x88, 0x200); // SOUNDBIAS
+   UPDATE_REG(REG_DISPCNT, lcd.dispcnt);
+   UPDATE_REG(REG_VCOUNT, lcd.vcount);
+   UPDATE_REG(REG_BG2PA, 0x0100);
+   UPDATE_REG(REG_BG2PD, 0x0100);
+   UPDATE_REG(REG_BG3PA, 0x0100);
+   UPDATE_REG(REG_BG3PD, 0x0100);
+   UPDATE_REG(REG_KEYINPUT, P1);
+   UPDATE_REG(REG_SOUNDBIAS, 0x200); // SOUNDBIAS
 
    // disable FIQ
    reg[16].I |= 0x40;
@@ -2174,8 +2143,8 @@ static void gbaUpdateJoypads(void)
       joy = systemReadJoypad(-1);
 
    P1 = 0x03FF ^ (joy & 0x3FF);
-   UPDATE_REG(0x130, P1);
-   uint16_t P1CNT = READ16LE(((uint16_t*)&ioMem[0x132]));
+   UPDATE_REG(REG_KEYINPUT, P1);
+   uint16_t P1CNT = READ16LE(((uint16_t*)&ioMem[REG_KEYCNT]));
 
    // this seems wrong, but there are cases where the game
    // can enter the stop state without requesting an IRQ from
@@ -2188,7 +2157,7 @@ static void gbaUpdateJoypads(void)
          if (p1 == (P1CNT & 0x3FF))
          {
             IF |= 0x1000;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
          }
       }
       else
@@ -2196,7 +2165,7 @@ static void gbaUpdateJoypads(void)
          if (p1 & P1CNT)
          {
             IF |= 0x1000;
-            UPDATE_REG(0x202, IF);
+            UPDATE_REG(REG_IF, IF);
          }
       }
    }
@@ -2284,29 +2253,29 @@ void CPULoop(int ticks)
                {
                   lcdTicks += 1008;
                   lcd.vcount++;
-                  UPDATE_REG(0x06, lcd.vcount);
+                  UPDATE_REG(REG_VCOUNT, lcd.vcount);
                   lcd.dispstat &= 0xFFFD;
-                  UPDATE_REG(0x04, lcd.dispstat);
+                  UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                   CPUCompareVCOUNT();
                }
                else
                {
                   lcdTicks += 224;
                   lcd.dispstat |= 2;
-                  UPDATE_REG(0x04, lcd.dispstat);
+                  UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                   if (lcd.dispstat & 16)
                   {
                      IF |= 2;
-                     UPDATE_REG(0x202, IF);
+                     UPDATE_REG(REG_IF, IF);
                   }
                }
                if (lcd.vcount > 227)
                {
                   //Reaching last line
                   lcd.dispstat &= 0xFFFC;
-                  UPDATE_REG(0x04, lcd.dispstat);
+                  UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                   lcd.vcount = 0;
-                  UPDATE_REG(0x06, lcd.vcount);
+                  UPDATE_REG(REG_VCOUNT, lcd.vcount);
                   CPUCompareVCOUNT();
                }
             }
@@ -2316,7 +2285,7 @@ void CPULoop(int ticks)
                {
                   // if in H-Blank, leave it and move to drawing mode
                   lcd.vcount++;
-                  UPDATE_REG(0x06, lcd.vcount);
+                  UPDATE_REG(REG_VCOUNT, lcd.vcount);
                   lcdTicks += 1008;
                   lcd.dispstat &= 0xFFFD;
                   if (lcd.vcount == 160)
@@ -2328,18 +2297,18 @@ void CPULoop(int ticks)
                      //}
                      lcd.dispstat |= 1;
                      lcd.dispstat &= 0xFFFD;
-                     UPDATE_REG(0x04, lcd.dispstat);
+                     UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                      if (lcd.dispstat & 0x0008)
                      {
                         IF |= 1;
-                        UPDATE_REG(0x202, IF);
+                        UPDATE_REG(REG_IF, IF);
                      }
                      CPUCheckDMA(1, 0x0f);
                      systemFrame();
                      systemDrawScreen(pix);
                      hasFrames = true;
                   }
-                  UPDATE_REG(0x04, lcd.dispstat);
+                  UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                   CPUCompareVCOUNT();
                }
                else
@@ -2352,13 +2321,13 @@ void CPULoop(int ticks)
                   }
                   // entering H-Blank
                   lcd.dispstat |= 2;
-                  UPDATE_REG(0x04, lcd.dispstat);
+                  UPDATE_REG(REG_DISPSTAT, lcd.dispstat);
                   lcdTicks += 224;
                   CPUCheckDMA(2, 0x0f);
                   if (lcd.dispstat & 16)
                   {
                      IF |= 2;
-                     UPDATE_REG(0x202, IF);
+                     UPDATE_REG(REG_IF, IF);
                   }
                }
             }
@@ -2388,11 +2357,11 @@ void CPULoop(int ticks)
                   if (TM0CNT & 0x40)
                   {
                      IF |= 0x08;
-                     UPDATE_REG(0x202, IF);
+                     UPDATE_REG(REG_IF, IF);
                   }
                }
                TM0D = 0xFFFF - (timers.tm[0].Ticks >> timers.tm[0].ClockReload);
-               UPDATE_REG(0x100, TM0D);
+               UPDATE_REG(REG_TM0CNT_L, TM0D);
             }
 
             if (timers.tm[1].On)
@@ -2410,10 +2379,10 @@ void CPULoop(int ticks)
                         if (TM1CNT & 0x40)
                         {
                            IF |= 0x10;
-                           UPDATE_REG(0x202, IF);
+                           UPDATE_REG(REG_IF, IF);
                         }
                      }
-                     UPDATE_REG(0x104, TM1D);
+                     UPDATE_REG(REG_TM1CNT_L, TM1D);
                   }
                }
                else
@@ -2427,11 +2396,11 @@ void CPULoop(int ticks)
                      if (TM1CNT & 0x40)
                      {
                         IF |= 0x10;
-                        UPDATE_REG(0x202, IF);
+                        UPDATE_REG(REG_IF, IF);
                      }
                   }
                   TM1D = 0xFFFF - (timers.tm[1].Ticks >> timers.tm[1].ClockReload);
-                  UPDATE_REG(0x104, TM1D);
+                  UPDATE_REG(REG_TM1CNT_L, TM1D);
                }
             }
 
@@ -2449,10 +2418,10 @@ void CPULoop(int ticks)
                         if (TM2CNT & 0x40)
                         {
                            IF |= 0x20;
-                           UPDATE_REG(0x202, IF);
+                           UPDATE_REG(REG_IF, IF);
                         }
                      }
-                     UPDATE_REG(0x108, TM2D);
+                     UPDATE_REG(REG_TM2CNT_L, TM2D);
                   }
                }
                else
@@ -2465,11 +2434,11 @@ void CPULoop(int ticks)
                      if (TM2CNT & 0x40)
                      {
                         IF |= 0x20;
-                        UPDATE_REG(0x202, IF);
+                        UPDATE_REG(REG_IF, IF);
                      }
                   }
                   TM2D = 0xFFFF - (timers.tm[2].Ticks >> timers.tm[2].ClockReload);
-                  UPDATE_REG(0x108, TM2D);
+                  UPDATE_REG(REG_TM2CNT_L, TM2D);
                }
             }
 
@@ -2486,10 +2455,10 @@ void CPULoop(int ticks)
                         if (TM3CNT & 0x40)
                         {
                            IF |= 0x40;
-                           UPDATE_REG(0x202, IF);
+                           UPDATE_REG(REG_IF, IF);
                         }
                      }
-                     UPDATE_REG(0x10C, TM3D);
+                     UPDATE_REG(REG_TM3CNT_L, TM3D);
                   }
                }
                else
@@ -2501,11 +2470,11 @@ void CPULoop(int ticks)
                      if (TM3CNT & 0x40)
                      {
                         IF |= 0x40;
-                        UPDATE_REG(0x202, IF);
+                        UPDATE_REG(REG_IF, IF);
                      }
                   }
                   TM3D = 0xFFFF - (timers.tm[3].Ticks >> timers.tm[3].ClockReload);
-                  UPDATE_REG(0x10C, TM3D);
+                  UPDATE_REG(REG_TM3CNT_L, TM3D);
                }
             }
          }
