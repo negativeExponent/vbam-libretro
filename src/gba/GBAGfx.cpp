@@ -1133,13 +1133,15 @@ void gfxDrawSprites()
                if ((sx < 240) || startpix)
                {
                   lineOBJpix += 2;
+
+                  int c = (obj[num].tile);
+                  if ((lcd.dispcnt & 7) > 2 && (c < 512))
+                     continue;
+
                   if (obj[num].color256)
                   {
                      if (obj[num].vFlip)
-                        t = obj[num].sizeY - t - 1;
-                     int c = (obj[num].tile);
-                     if ((lcd.dispcnt & 7) > 2 && (c < 512))
-                        continue;
+                        t = obj[num].sizeY - t - 1;                     
 
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
@@ -1239,9 +1241,6 @@ void gfxDrawSprites()
                      {
                         t = obj[num].sizeY - t - 1;
                      }
-                     int c = (obj[num].tile);
-                     if ((lcd.dispcnt & 7) > 2 && (c < 512))
-                        continue;
 
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
@@ -1401,131 +1400,95 @@ void gfxDrawOBJWin()
    if ((layerEnable & 0x9000) == 0x9000)
    {
       uint16_t* sprites = (uint16_t*)oam;
-      for (int x = 0; x < 128; ++x)
+      for (int num = 0; num < 128; ++num)
       {
-         int lineOBJpix = lineOBJpixleft[x];
-         uint16_t a0 = READ16LE(sprites++);
-         uint16_t a1 = READ16LE(sprites++);
-         uint16_t a2 = READ16LE(sprites++);
-         ++sprites;
-
+         int lineOBJpix = lineOBJpixleft[num];
          if (lineOBJpix <= 0)
             return;
 
          // ignores non OBJ-WIN and disabled OBJ-WIN
-         if (((a0 & 0x0c00) != 0x0800) || ((a0 & 0x0300) == 0x0200))
+         if ((obj[num].mode != 2) || obj[num].objDisable)
             continue;
 
-         if ((a0 & 0x0c00) == 0x0c00)
-            a0 &= 0xF3FF;
+         int sy = obj[num].startY;
 
-         int sizeX = objSizeMapX[a1 >> 14][a0 >> 14];
-         int sizeY = objSizeMapY[a1 >> 14][a0 >> 14];
-
-         int sy = (a0 & 255);
-
-         if (a0 & 0x0100)
+         if (obj[num].affineOn)
          {
-            int fieldX = sizeX;
-            int fieldY = sizeY;
-            if (a0 & 0x0200)
-            {
-               fieldX <<= 1;
-               fieldY <<= 1;
-            }
-            if ((sy + fieldY) > 256)
+            if ((sy + obj[num].fieldY) > 256)
                sy -= 256;
             int t = lcd.vcount - sy;
-            if ((t >= 0) && (t < fieldY))
+            if ((t >= 0) && (t < obj[num].fieldY))
             {
-               int sx = (a1 & 0x1FF);
+               int sx = (obj[num].startX);
                int startpix = 0;
-               if ((sx + fieldX) > 512)
+               if ((sx + obj[num].fieldX) > 512)
                {
                   startpix = 512 - sx;
                }
                if ((sx < 240) || startpix)
                {
                   lineOBJpix -= 8;
-                  int rot = (a1 >> 9) & 0x1F;
-                  uint16_t* OAM = (uint16_t*)oam;
-                  int dx = READ16LE(&OAM[3 + (rot << 4)]);
-                  if (dx & 0x8000)
-                     dx |= 0xFFFF8000;
-                  int dmx = READ16LE(&OAM[7 + (rot << 4)]);
-                  if (dmx & 0x8000)
-                     dmx |= 0xFFFF8000;
-                  int dy = READ16LE(&OAM[11 + (rot << 4)]);
-                  if (dy & 0x8000)
-                     dy |= 0xFFFF8000;
-                  int dmy = READ16LE(&OAM[15 + (rot << 4)]);
-                  if (dmy & 0x8000)
-                     dmy |= 0xFFFF8000;
 
-                  int realX = ((sizeX) << 7) - (fieldX >> 1) * dx - (fieldY >> 1) * dmx + t * dmx;
-                  int realY = ((sizeY) << 7) - (fieldX >> 1) * dy - (fieldY >> 1) * dmy + t * dmy;
+                  int realX = ((obj[num].sizeX) << 7) - (obj[num].fieldX >> 1) * obj[num].dx - (obj[num].fieldY >> 1) * obj[num].dmx + t * obj[num].dmx;
+                  int realY = ((obj[num].sizeY) << 7) - (obj[num].fieldX >> 1) * obj[num].dy - (obj[num].fieldY >> 1) * obj[num].dmy + t * obj[num].dmy;
 
-                  if (a0 & 0x2000)
+                  int c = (obj[num].tile);
+                  if ((lcd.dispcnt & 7) > 2 && (c < 512))
+                     continue;
+
+                  if (obj[num].color256)
                   {
-                     int c = (a2 & 0x3FF);
-                     if ((lcd.dispcnt & 7) > 2 && (c < 512))
-                        continue;
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
-                        inc = sizeX >> 2;
+                        inc = obj[num].sizeX >> 2;
                      else
                         c &= 0x3FE;
-                     for (int x = 0; x < fieldX; ++x)
+                     for (int xx = 0; xx < obj[num].fieldX; ++xx)
                      {
-                        if (x >= startpix)
+                        if (xx >= startpix)
                            lineOBJpix -= 2;
                         if (lineOBJpix < 0)
                            continue;
                         int xxx = realX >> 8;
                         int yyy = realY >> 8;
 
-                        if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240)
+                        if (xxx < 0 || xxx >= obj[num].sizeX || yyy < 0 || yyy >= obj[num].sizeY || sx >= 240)
                         {
                         }
                         else
                         {
-                           uint32_t color = vram
-                               [0x10000 + ((((c + (yyy >> 3) * inc) << 5) + ((yyy & 7) << 3) + ((xxx >> 3) << 6) + (xxx & 7)) & 0x7fff)];
+                           uint32_t color = vram[0x10000 + ((((c + (yyy >> 3) * inc) << 5) + ((yyy & 7) << 3) + ((xxx >> 3) << 6) + (xxx & 7)) & 0x7FFF)];
                            if (color)
                            {
                               lineOBJWin[sx] = 1;
                            }
                         }
                         sx = (sx + 1) & 511;
-                        realX += dx;
-                        realY += dy;
+                        realX += obj[num].dx;
+                        realY += obj[num].dy;
                      }
                   }
-                  else
+                  else // color 16 / palette 16
                   {
-                     int c = (a2 & 0x3FF);
-                     if ((lcd.dispcnt & 7) > 2 && (c < 512))
-                        continue;
-
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
-                        inc = sizeX >> 3;
-                     for (int x = 0; x < fieldX; ++x)
+                        inc = obj[num].sizeX >> 3;
+                     for (int xx = 0; xx < obj[num].fieldX; ++xx)
                      {
-                        if (x >= startpix)
+                        if (xx >= startpix)
                            lineOBJpix -= 2;
                         if (lineOBJpix < 0)
                            continue;
                         int xxx = realX >> 8;
                         int yyy = realY >> 8;
 
-                        if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240)
+                        if (xxx < 0 || xxx >= obj[num].sizeX || yyy < 0 || yyy >= obj[num].sizeY || sx >= 240)
                         {
                         }
                         else
                         {
-                           uint32_t color = vram
-                               [0x10000 + ((((c + (yyy >> 3) * inc) << 5) + ((yyy & 7) << 2) + ((xxx >> 3) << 5) + ((xxx & 7) >> 1)) & 0x7fff)];
+                           uint32_t color = vram[0x10000 +
+                                 ((((c + (yyy >> 3) * inc) << 5) + ((yyy & 7) << 2) + ((xxx >> 3) << 5) + ((xxx & 7) >> 1)) & 0x7fff)];
                            if (xxx & 1)
                               color >>= 4;
                            else
@@ -1537,8 +1500,8 @@ void gfxDrawOBJWin()
                            }
                         }
                         sx = (sx + 1) & 511;
-                        realX += dx;
-                        realY += dy;
+                        realX += obj[num].dx;
+                        realY += obj[num].dy;
                      }
                   }
                }
@@ -1546,44 +1509,46 @@ void gfxDrawOBJWin()
          }
          else
          {
-            if ((sy + sizeY) > 256)
+            if ((sy + obj[num].sizeY) > 256)
                sy -= 256;
             int t = lcd.vcount - sy;
-            if ((t >= 0) && (t < sizeY))
+            if ((t >= 0) && (t < obj[num].sizeY))
             {
-               int sx = (a1 & 0x1FF);
+               int sx = (obj[num].startX);
                int startpix = 0;
-               if ((sx + sizeX) > 512)
+               if ((sx + obj[num].sizeX) > 512)
                {
                   startpix = 512 - sx;
                }
                if ((sx < 240) || startpix)
                {
                   lineOBJpix += 2;
-                  if (a0 & 0x2000)
+
+                  int c = (obj[num].tile);
+                  if ((lcd.dispcnt & 7) > 2 && (c < 512))
+                     continue;
+
+                  if (obj[num].color256) // color 256 / palette 1
                   {
-                     if (a1 & 0x2000)
-                        t = sizeY - t - 1;
-                     int c = (a2 & 0x3FF);
-                     if ((lcd.dispcnt & 7) > 2 && (c < 512))
-                        continue;
+                     if (obj[num].vFlip)
+                        t = obj[num].sizeY - t - 1;
 
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
                      {
-                        inc = sizeX >> 2;
+                        inc = obj[num].sizeX >> 2;
                      }
                      else
                      {
                         c &= 0x3FE;
                      }
                      int xxx = 0;
-                     if (a1 & 0x1000)
-                        xxx = sizeX - 1;
+                     if (obj[num].hFlip)
+                        xxx = obj[num].sizeX - 1;
                      int address = 0x10000 + ((((c + (t >> 3) * inc) << 5) + ((t & 7) << 3) + ((xxx >> 3) << 6) + (xxx & 7)) & 0x7fff);
-                     if (a1 & 0x1000)
+                     if (obj[num].hFlip)
                         xxx = 7;
-                     for (int xx = 0; xx < sizeX; ++xx)
+                     for (int xx = 0; xx < obj[num].sizeX; ++xx)
                      {
                         if (xx >= startpix)
                            --lineOBJpix;
@@ -1599,7 +1564,7 @@ void gfxDrawOBJWin()
                         }
 
                         sx = (sx + 1) & 511;
-                        if (a1 & 0x1000)
+                        if (obj[num].hFlip)
                         {
                            --address;
                            if (--xxx == -1)
@@ -1623,29 +1588,25 @@ void gfxDrawOBJWin()
                         }
                      }
                   }
-                  else
+                  else // color 16 / palette 16
                   {
-                     if (a1 & 0x2000)
-                        t = sizeY - t - 1;
-                     int c = (a2 & 0x3FF);
-                     if ((lcd.dispcnt & 7) > 2 && (c < 512))
-                        continue;
+                     if (obj[num].vFlip)
+                        t = obj[num].sizeY - t - 1;
 
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
                      {
-                        inc = sizeX >> 3;
+                        inc = obj[num].sizeX >> 3;
                      }
                      int xxx = 0;
-                     if (a1 & 0x1000)
-                        xxx = sizeX - 1;
+                     if (obj[num].hFlip)
+                        xxx = obj[num].sizeX - 1;
                      int address = 0x10000 + ((((c + (t >> 3) * inc) << 5) + ((t & 7) << 2) + ((xxx >> 3) << 5) + ((xxx & 7) >> 1)) & 0x7fff);
 
-                     if (a1 & 0x1000)
+                     if (obj[num].hFlip)
                      {
                         xxx = 7;
-                        for (int xx = sizeX - 1; xx >= 0;
-                             --xx)
+                        for (int xx = obj[num].sizeX - 1; xx >= 0; --xx)
                         {
                            if (xx >= startpix)
                               --lineOBJpix;
@@ -1663,9 +1624,7 @@ void gfxDrawOBJWin()
 
                               if (color)
                               {
-                                 lineOBJWin
-                                     [sx]
-                                     = 1;
+                                 lineOBJWin[sx] = 1;
                               }
                            }
                            sx = (sx + 1) & 511;
@@ -1682,7 +1641,7 @@ void gfxDrawOBJWin()
                      }
                      else
                      {
-                        for (int xx = 0; xx < sizeX; ++xx)
+                        for (int xx = 0; xx < obj[num].sizeX; ++xx)
                         {
                            if (xx >= startpix)
                               --lineOBJpix;
@@ -1700,9 +1659,7 @@ void gfxDrawOBJWin()
 
                               if (color)
                               {
-                                 lineOBJWin
-                                     [sx]
-                                     = 1;
+                                 lineOBJWin[sx] = 1;
                               }
                            }
                            sx = (sx + 1) & 511;
