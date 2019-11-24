@@ -925,6 +925,8 @@ void CPUWriteMemory(uint32_t address, uint32_t value)
          WRITE32LE(vram + address, value);
          break;
       case 0x07:
+         oam_updated = true;
+         oam_obj_updated[(address >> 3) & 0x7F] = true;
          WRITE32LE(oam + (address & 0x3FC), value);
          break;
       case 0x0D:
@@ -975,6 +977,8 @@ void CPUWriteHalfWord(uint32_t address, uint16_t value)
          WRITE16LE(vram + address, value);
          break;
       case 7:
+         oam_updated = true;
+         oam_obj_updated[(address >> 3) & 0x7F] = true;
          WRITE16LE(oam + (address & 0x3FE), value);
          break;
       case 8:

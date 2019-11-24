@@ -565,6 +565,9 @@ bool CPUReadState(const uint8_t* data, unsigned size)
    LCDUpdateWindow1();
    LCDUpdateBGRegisters();
 
+   oam_updated = true;
+   for (int x = 0; x < 128; x++) oam_obj_updated[x] = true;
+
    SetSaveType(saveType);
 
    systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;

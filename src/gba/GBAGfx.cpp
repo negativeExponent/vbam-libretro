@@ -773,9 +773,6 @@ void gfxDrawRotScreen16Bit160()
    }
 }
 
-#define OBJSHAPE (a0 >> 14)
-#define OBJSIZE  (a1 >> 14)
-
 static int objSizeMapX[4][4] = {
    {  8, 16,  8, 8 },
    { 16, 32,  8, 8 },
@@ -790,6 +787,136 @@ static int objSizeMapY[4][4] = {
    { 64, 32, 64, 8 }
 };
 
+struct obj_attribute_t
+{
+   // obj attribute 0
+   int  startY;
+   int  mode;
+   int  shape;
+   bool affineOn;
+   bool doubleSizeFlag;
+   bool mosaicOn;
+   bool color256;
+
+   // obj attribute 1
+   int  startX;
+   int  size;
+   bool hFlip;
+   bool vFlip;
+
+   // obj attribute 2
+   int tile;
+   int affineGroup;
+   int priority;
+   int palette;
+
+   // misc
+   uint32_t prio;
+   bool objDisable;
+   int sizeX;
+   int sizeY;
+
+   // affine
+   int dx;
+   int dmx;
+   int dy;
+   int dmy;
+   int fieldX;
+   int fieldY;
+};
+
+bool oam_updated;
+bool oam_obj_updated[128];
+static obj_attribute_t obj[128];
+
+static inline void update_oam()
+{
+   uint16_t* sprites = (uint16_t*)oam;
+   uint16_t value = 0;
+   oam_updated = false;
+   for (int num = 0; num < 128; ++num)
+   {
+      if (oam_obj_updated[num])
+      {
+         oam_obj_updated[num] = false;
+
+         // Read obj attribute 0
+         value = READ16LE(sprites++);
+
+         if ((value & 0x0C00) == 0x0C00) value &= 0xF3FF;
+         if ((value & 0xC000) == 0xC000) value &= 0x3FFF;
+
+         obj[num].startY         = (value & 255);
+         obj[num].affineOn       = (value & 0x100) ? true : false;
+         obj[num].doubleSizeFlag = (value & 0x200) ? true : false;
+         obj[num].mode           = (value & 0x0C00) >> 10;
+         obj[num].mosaicOn       = (value & 0x1000) ? true : false;
+         obj[num].color256       = (value & 0x2000) ? true : false;
+         obj[num].shape          = (value & 0xC000) >> 14;
+
+         obj[num].objDisable = false;
+         if ((obj[num].affineOn == false) && obj[num].doubleSizeFlag)
+            obj[num].objDisable = true;
+
+         // Read obj attribute 1
+         value = READ16LE(sprites++);
+         obj[num].startX         = (value & 0x1FF);
+         obj[num].hFlip          = (value & 0x1000) ? true : false;
+         obj[num].vFlip          = (value & 0x2000) ? true : false;
+         obj[num].size           = (value & 0xC000) >> 14;
+
+         if (obj[num].affineOn)
+            obj[num].affineGroup = (value & 0x3E00) >> 9;
+         else
+            obj[num].affineGroup = 0;
+
+         // Read obj attribute 2
+         value = READ16LE(sprites++);
+         obj[num].tile           = (value & 0x3FF);
+         obj[num].priority       = (value & 0xC00) >> 10;
+         obj[num].palette        = ((value & 0xF000) >> 12) << 4;
+
+         ++sprites;
+
+         // pre-calculate internal stuff
+         obj[num].sizeX = objSizeMapX[obj[num].size][obj[num].shape];
+         obj[num].sizeY = objSizeMapY[obj[num].size][obj[num].shape];
+         obj[num].prio  = (obj[num].priority << 25) | (obj[num].mode << 16);
+      }
+      else
+         sprites += 4; // skip to next obj
+   }
+
+   // pre-calculate affine parameters if enabled
+   uint16_t* OAM = (uint16_t*)oam;
+   for (int num = 0; num < 128; ++num)
+   {
+      if (obj[num].affineOn == false)
+         continue;
+      int rot = obj[num].affineGroup;
+      obj[num].dx = READ16LE(&OAM[3 + (rot << 4)]);
+      if (obj[num].dx & 0x8000)
+         obj[num].dx |= 0xFFFF8000;
+      obj[num].dmx = READ16LE(&OAM[7 + (rot << 4)]);
+      if (obj[num].dmx & 0x8000)
+         obj[num].dmx |= 0xFFFF8000;
+      obj[num].dy = READ16LE(&OAM[11 + (rot << 4)]);
+      if (obj[num].dy & 0x8000)
+         obj[num].dy |= 0xFFFF8000;
+      obj[num].dmy = READ16LE(&OAM[15 + (rot << 4)]);
+      if (obj[num].dmy & 0x8000)
+         obj[num].dmy |= 0xFFFF8000;
+      
+      obj[num].fieldX = obj[num].sizeX;
+      obj[num].fieldY = obj[num].sizeY;
+      if (obj[num].doubleSizeFlag)
+      {
+         obj[num].fieldX <<= 1;
+         obj[num].fieldY <<= 1;
+      }
+   }
+}
+
 void gfxDrawSprites()
 {
    // lineOBJpix is used to keep track of the drawn OBJs
@@ -800,44 +927,33 @@ void gfxDrawSprites()
    gfxClearArray(lineOBJ);
    if (layerEnable & 0x1000)
    {
-      uint16_t* sprites = (uint16_t*)oam;
       uint16_t* spritePalette = &((uint16_t*)paletteRAM)[256];
       int mosaicY = ((lcd.mosaic & 0xF000) >> 12) + 1;
       int mosaicX = ((lcd.mosaic & 0xF00) >> 8) + 1;
-      for (int x = 0; x < 128; ++x)
+      for (int num = 0; num < 128; ++num)
       {
-         uint16_t a0 = READ16LE(sprites++);
-         uint16_t a1 = READ16LE(sprites++);
-         uint16_t a2 = READ16LE(sprites++);
-         ++sprites;
-
-         lineOBJpixleft[x] = lineOBJpix;
+         lineOBJpixleft[num] = lineOBJpix;
 
          lineOBJpix -= 2;
          if (lineOBJpix <= 0) {
             // make sure OBJwin, if used would stop as well where is should
-            lineOBJpixleft[x + 1] = 0;
+            lineOBJpixleft[num + 1] = 0;
             return;
          }
 
-         if ((a0 & 0x0c00) == 0x0c00)
-            a0 &= 0xF3FF;
-
-         int sizeX = objSizeMapX[OBJSIZE][OBJSHAPE];
-         int sizeY = objSizeMapY[OBJSIZE][OBJSHAPE];
-
 #ifdef SPRITE_DEBUG
-         int maskX = sizeX - 1;
-         int maskY = sizeY - 1;
+         int maskX = obj[num].sizeX - 1;
+         int maskY = obj[num].sizeY - 1;
 #endif
-
-         int sy = (a0 & 255);
-         int sx = (a1 & 0x1FF);
+         int sy = obj[num].startY;
+         int sx = obj[num].startX;
 
          // computes ticks used by OBJ-WIN if OBJWIN is enabled
-         if (((a0 & 0x0c00) == 0x0800) && (layerEnable & 0x8000))
+         if ((obj[num].mode == 2) && (layerEnable & 0x8000))
          {
-            if ((a0 & 0x0300) == 0x0300)
+            int sizeX = obj[num].sizeX;
+            int sizeY = obj[num].sizeY;
+            if (obj[num].affineOn && obj[num].doubleSizeFlag)
             {
                sizeX <<= 1;
                sizeY <<= 1;
@@ -855,7 +971,7 @@ void gfxDrawSprites()
                sizeX = 240 - sx;
             if ((lcd.vcount >= sy) && (lcd.vcount < sy + sizeY) && (sx < 240))
             {
-               if (a0 & 0x0100)
+               if (obj[num].affineOn)
                   lineOBJpix -= 8 + 2 * sizeX;
                else
                   lineOBJpix -= sizeX - 2;
@@ -863,25 +979,18 @@ void gfxDrawSprites()
             continue;
          }
          // else ignores OBJ-WIN if OBJWIN is disabled, and ignored disabled OBJ
-         else if (((a0 & 0x0c00) == 0x0800) || ((a0 & 0x0300) == 0x0200))
+         else if ((obj[num].mode == 2) || obj[num].objDisable)
             continue;
 
-         if (a0 & 0x0100)
+         if (obj[num].affineOn)
          {
-            int fieldX = sizeX;
-            int fieldY = sizeY;
-            if (a0 & 0x0200)
-            {
-               fieldX <<= 1;
-               fieldY <<= 1;
-            }
-            if ((sy + fieldY) > 256)
+            if ((sy + obj[num].fieldY) > 256)
                sy -= 256;
             int t = lcd.vcount - sy;
-            if ((t >= 0) && (t < fieldY))
+            if ((t >= 0) && (t < obj[num].fieldY))
             {
                int startpix = 0;
-               if ((sx + fieldX) > 512)
+               if ((sx + obj[num].fieldX) > 512)
                {
                   startpix = 512 - sx;
                }
@@ -890,100 +999,83 @@ void gfxDrawSprites()
                   if ((sx < 240) || startpix)
                   {
                      lineOBJpix -= 8;
-                     int rot = (a1 >> 9) & 0x1F;
-                     uint16_t* OAM = (uint16_t*)oam;
-                     int dx = READ16LE(&OAM[3 + (rot << 4)]);
-                     if (dx & 0x8000)
-                        dx |= 0xFFFF8000;
-                     int dmx = READ16LE(&OAM[7 + (rot << 4)]);
-                     if (dmx & 0x8000)
-                        dmx |= 0xFFFF8000;
-                     int dy = READ16LE(&OAM[11 + (rot << 4)]);
-                     if (dy & 0x8000)
-                        dy |= 0xFFFF8000;
-                     int dmy = READ16LE(&OAM[15 + (rot << 4)]);
-                     if (dmy & 0x8000)
-                        dmy |= 0xFFFF8000;
 
-                     if (a0 & 0x1000)
+                     if (obj[num].mosaicOn)
                      {
                         t -= (t % mosaicY);
                      }
 
-                     int realX = ((sizeX) << 7) - (fieldX >> 1) * dx - (fieldY >> 1) * dmx + t * dmx;
-                     int realY = ((sizeY) << 7) - (fieldX >> 1) * dy - (fieldY >> 1) * dmy + t * dmy;
+                     int realX = (obj[num].sizeX << 7) - (obj[num].fieldX >> 1) * obj[num].dx - (obj[num].fieldY >> 1) * obj[num].dmx + t * obj[num].dmx;
+                     int realY = (obj[num].sizeY << 7) - (obj[num].fieldX >> 1) * obj[num].dy - (obj[num].fieldY >> 1) * obj[num].dmy + t * obj[num].dmy;
 
-                     uint32_t prio = (((a2 >> 10) & 3) << 25) | ((a0 & 0x0c00) << 6);
-
-                     int c = (a2 & 0x3FF);
+                     int c = (obj[num].tile);
                      if ((lcd.dispcnt & 7) > 2 && (c < 512))
                         continue;
 
-                     if (a0 & 0x2000)
+                     if (obj[num].color256)
                      {
                         int inc = 32;
                         if (lcd.dispcnt & 0x40)
-                           inc = sizeX >> 2;
+                           inc = obj[num].sizeX >> 2;
                         else
                            c &= 0x3FE;
-                        for (int x = 0; x < fieldX; ++x)
+                        for (int xx = 0; xx < obj[num].fieldX; ++xx)
                         {
-                           if (x >= startpix)
+                           if (xx >= startpix)
                               lineOBJpix -= 2;
                            if (lineOBJpix < 0)
                               continue;
                            int xxx = realX >> 8;
                            int yyy = realY >> 8;
 
-                           if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240)
+                           if (xxx < 0 || xxx >= obj[num].sizeX || yyy < 0 || yyy >= obj[num].sizeY || sx >= 240)
                            {
                            }
                            else
                            {
                               uint32_t color = vram[0x10000 + ((((c + (yyy >> 3) * inc) << 5) + ((yyy & 7) << 3) + ((xxx >> 3) << 6) + (xxx & 7)) & 0x7FFF)];
-                              if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
+                              if ((color == 0) && (((obj[num].prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
                               {
-                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | prio;
-                                 if ((a0 & 0x1000) && m)
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
-                              else if (color && (prio < (lineOBJ[sx] & 0xFF000000)))
+                              else if (color && (obj[num].prio < (lineOBJ[sx] & 0xFF000000)))
                               {
-                                 lineOBJ[sx] = READ16LE(&spritePalette[color]) | prio;
-                                 if ((a0 & 0x1000) && m)
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = READ16LE(&spritePalette[color]) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
 
-                              if (a0 & 0x1000)
+                              if (obj[num].mosaicOn)
                               {
                                  if (++m == mosaicX)
                                     m = 0;
                               }
 #ifdef SPRITE_DEBUG
-                              if (t == 0 || t == maskY || x == 0 || x == maskX)
+                              if (t == 0 || t == maskY || xx == 0 || xx == maskX)
                                  lineOBJ[sx] = 0x001F;
 #endif
                            }
                            sx = (sx + 1) & 511;
-                           realX += dx;
-                           realY += dy;
+                           realX += obj[num].dx;
+                           realY += obj[num].dy;
                         }
                      }
                      else
                      {
                         int inc = 32;
                         if (lcd.dispcnt & 0x40)
-                           inc = sizeX >> 3;
-                        int palette = (a2 >> 8) & 0xF0;
-                        for (int x = 0; x < fieldX; ++x)
+                           inc = obj[num].sizeX >> 3;
+                        for (int xx = 0; xx < obj[num].fieldX; ++xx)
                         {
-                           if (x >= startpix)
+                           if (xx >= startpix)
                               lineOBJpix -= 2;
                            if (lineOBJpix < 0)
                               continue;
                            int xxx = realX >> 8;
                            int yyy = realY >> 8;
-                           if (xxx < 0 || xxx >= sizeX || yyy < 0 || yyy >= sizeY || sx >= 240)
+                           if (xxx < 0 || xxx >= obj[num].sizeX || yyy < 0 || yyy >= obj[num].sizeY || sx >= 240)
                            {
                            }
                            else
@@ -994,32 +1086,32 @@ void gfxDrawSprites()
                               else
                                  color &= 0x0F;
 
-                              if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
+                              if ((color == 0) && (((obj[num].prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
                               {
-                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | prio;
-                                 if ((a0 & 0x1000) && m)
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
-                              else if (color && (prio < (lineOBJ[sx] & 0xFF000000)))
+                              else if (color && (obj[num].prio < (lineOBJ[sx] & 0xFF000000)))
                               {
-                                 lineOBJ[sx] = READ16LE(&spritePalette[palette + color]) | prio;
-                                 if ((a0 & 0x1000) && m)
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = READ16LE(&spritePalette[obj[num].palette + color]) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
                            }
-                           if ((a0 & 0x1000) && m)
+                           if (obj[num].mosaicOn && m)
                            {
                               if (++m == mosaicX)
                                  m = 0;
                            }
 
 #ifdef SPRITE_DEBUG
-                           if (t == 0 || t == maskY || x == 0 || x == maskX)
+                           if (t == 0 || t == maskY || xx == 0 || xx == maskX)
                               lineOBJ[sx] = 0x001F;
 #endif
                            sx = (sx + 1) & 511;
-                           realX += dx;
-                           realY += dy;
+                           realX += obj[num].dx;
+                           realY += obj[num].dy;
                         }
                      }
                   }
@@ -1028,52 +1120,51 @@ void gfxDrawSprites()
          }
          else
          {
-            if (sy + sizeY > 256)
+            if (sy + obj[num].sizeY > 256)
                sy -= 256;
             int t = lcd.vcount - sy;
-            if ((t >= 0) && (t < sizeY))
+            if ((t >= 0) && (t < obj[num].sizeY))
             {
                int startpix = 0;
-               if ((sx + sizeX) > 512)
+               if ((sx + obj[num].sizeX) > 512)
                {
                   startpix = 512 - sx;
                }
                if ((sx < 240) || startpix)
                {
                   lineOBJpix += 2;
-                  if (a0 & 0x2000)
+                  if (obj[num].color256)
                   {
-                     if (a1 & 0x2000)
-                        t = sizeY - t - 1;
-                     int c = (a2 & 0x3FF);
+                     if (obj[num].vFlip)
+                        t = obj[num].sizeY - t - 1;
+                     int c = (obj[num].tile);
                      if ((lcd.dispcnt & 7) > 2 && (c < 512))
                         continue;
 
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
                      {
-                        inc = sizeX >> 2;
+                        inc = obj[num].sizeX >> 2;
                      }
                      else
                      {
                         c &= 0x3FE;
                      }
                      int xxx = 0;
-                     if (a1 & 0x1000)
-                        xxx = sizeX - 1;
+                     if (obj[num].hFlip)
+                        xxx = obj[num].sizeX - 1;
 
-                     if (a0 & 0x1000)
+                     if (obj[num].mosaicOn)
                      {
                         t -= (t % mosaicY);
                      }
 
                      int address = 0x10000 + ((((c + (t >> 3) * inc) << 5) + ((t & 7) << 3) + ((xxx >> 3) << 6) + (xxx & 7)) & 0x7FFF);
 
-                     if (a1 & 0x1000)
+                     if (obj[num].hFlip)
                         xxx = 7;
-                     uint32_t prio = (((a2 >> 10) & 3) << 25) | ((a0 & 0x0c00) << 6);
 
-                     for (int xx = 0; xx < sizeX; ++xx)
+                     for (int xx = 0; xx < obj[num].sizeX; ++xx)
                      {
                         if (xx >= startpix)
                            --lineOBJpix;
@@ -1082,24 +1173,24 @@ void gfxDrawSprites()
                         if (sx < 240)
                         {
                            uint8_t color = vram[address];
-                           if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
+                           if ((color == 0) && (((obj[num].prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
                            {
-                              lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | prio;
-                              if ((a0 & 0x1000) && m)
+                              lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | obj[num].prio;
+                              if (obj[num].mosaicOn && m)
                               {
-                                 lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
                            }
-                           else if ((color) && (prio < (lineOBJ[sx] & 0xFF000000)))
+                           else if ((color) && (obj[num].prio < (lineOBJ[sx] & 0xFF000000)))
                            {
-                              lineOBJ[sx] = READ16LE(&spritePalette[color]) | prio;
-                              if ((a0 & 0x1000) && m)
+                              lineOBJ[sx] = READ16LE(&spritePalette[color]) | obj[num].prio;
+                              if (obj[num].mosaicOn && m)
                               {
-                                 lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
                            }
 
-                           if (a0 & 0x1000)
+                           if (obj[num].mosaicOn)
                            {
                               if (++m == mosaicX)
                               {
@@ -1114,7 +1205,7 @@ void gfxDrawSprites()
                         }
 
                         sx = (sx + 1) & 511;
-                        if (a1 & 0x1000)
+                        if (obj[num].hFlip)
                         {
                            --address;
                            if (--xxx == -1)
@@ -1144,37 +1235,36 @@ void gfxDrawSprites()
                   }
                   else
                   {
-                     if (a1 & 0x2000)
+                     if (obj[num].vFlip)
                      {
-                        t = sizeY - t - 1;
+                        t = obj[num].sizeY - t - 1;
                      }
-                     int c = (a2 & 0x3FF);
+                     int c = (obj[num].tile);
                      if ((lcd.dispcnt & 7) > 2 && (c < 512))
                         continue;
 
                      int inc = 32;
                      if (lcd.dispcnt & 0x40)
                      {
-                        inc = sizeX >> 3;
+                        inc = obj[num].sizeX >> 3;
                      }
                      int xxx = 0;
-                     if (a1 & 0x1000)
+                     if (obj[num].hFlip)
                      {
-                        xxx = sizeX - 1;
+                        xxx = obj[num].sizeX - 1;
                      }
 
-                     if (a0 & 0x1000)
+                     if (obj[num].mosaicOn)
                      {
                         t -= (t % mosaicY);
                      }
 
                      int address = 0x10000 + ((((c + (t >> 3) * inc) << 5) + ((t & 7) << 2) + ((xxx >> 3) << 5) + ((xxx & 7) >> 1)) & 0x7FFF);
-                     uint32_t prio = (((a2 >> 10) & 3) << 25) | ((a0 & 0x0c00) << 6);
-                     int palette = (a2 >> 8) & 0xF0;
-                     if (a1 & 0x1000)
+
+                     if (obj[num].hFlip)
                      {
                         xxx = 7;
-                        for (int xx = sizeX - 1; xx >= 0;
+                        for (int xx = obj[num].sizeX - 1; xx >= 0;
                              --xx)
                         {
                            if (xx >= startpix)
@@ -1193,20 +1283,20 @@ void gfxDrawSprites()
                                  color &= 0x0F;
                               }
 
-                              if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
+                              if ((color == 0) && (((obj[num].prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
                               {
-                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | prio;
-                                 if ((a0 & 0x1000) && m)
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
-                              else if ((color) && (prio < (lineOBJ[sx] & 0xFF000000)))
+                              else if ((color) && (obj[num].prio < (lineOBJ[sx] & 0xFF000000)))
                               {
-                                 lineOBJ[sx] = READ16LE(&spritePalette[palette + color]) | prio;
-                                 if ((a0 & 0x1000) && m)
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                 lineOBJ[sx] = READ16LE(&spritePalette[obj[num].palette + color]) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                               }
                            }
-                           if (a0 & 0x1000)
+                           if (obj[num].mosaicOn)
                            {
                               if (++m == mosaicX)
                               {
@@ -1235,7 +1325,7 @@ void gfxDrawSprites()
                      }
                      else
                      {
-                        for (int xx = 0; xx < sizeX; ++xx)
+                        for (int xx = 0; xx < obj[num].sizeX; ++xx)
                         {
                            if (xx >= startpix)
                            {
@@ -1255,24 +1345,24 @@ void gfxDrawSprites()
                               else
                                  color &= 0x0F;
 
-                              if ((color == 0) && (((prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
+                              if ((color == 0) && (((obj[num].prio >> 25) & 3) < ((lineOBJ[sx] >> 25) & 3)))
                               {
-                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | prio;
-                                 if ((a0 & 0x1000) && m)
+                                 lineOBJ[sx] = (lineOBJ[sx] & 0xF9FFFFFF) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
                                  {
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                                  }
                               }
-                              else if (color && (prio < (lineOBJ[sx] & 0xFF000000)))
+                              else if (color && (obj[num].prio < (lineOBJ[sx] & 0xFF000000)))
                               {
-                                 lineOBJ[sx] = READ16LE(&spritePalette[palette + color]) | prio;
-                                 if ((a0 & 0x1000) && m)
+                                 lineOBJ[sx] = READ16LE(&spritePalette[obj[num].palette + color]) | obj[num].prio;
+                                 if (obj[num].mosaicOn && m)
                                  {
-                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | prio;
+                                    lineOBJ[sx] = (lineOBJ[sx - 1] & 0xF9FFFFFF) | obj[num].prio;
                                  }
                               }
                            }
-                           if (a0 & 0x1000)
+                           if (obj[num].mosaicOn)
                            {
                               if (++m == mosaicX)
                                  m = 0;
@@ -1329,8 +1419,8 @@ void gfxDrawOBJWin()
          if ((a0 & 0x0c00) == 0x0c00)
             a0 &= 0xF3FF;
 
-         int sizeX = objSizeMapX[OBJSIZE][OBJSHAPE];
-         int sizeY = objSizeMapY[OBJSIZE][OBJSHAPE];
+         int sizeX = objSizeMapX[a1 >> 14][a0 >> 14];
+         int sizeY = objSizeMapY[a1 >> 14][a0 >> 14];
 
          int sy = (a0 & 255);
 
@@ -1739,6 +1829,9 @@ void LCDResetBGRegisters()
       bg->x_pos = 0;
       bg->y_pos = 0;
    }
+   //update_oam();
+   oam_updated = true;
+   for (int x = 0; x < 128; x++) oam_obj_updated[x] = true;
 }
 
 void LCDUpdateBGRegisters()
@@ -1773,6 +1866,8 @@ void gfxDrawScanline(pixFormat* dest, int renderer_mode, int renderer_type)
       lcd.bg[3].x_pos = lcd.bg[3].x_ref;
       lcd.bg[3].y_pos = lcd.bg[3].y_ref;
    }
+
+   if (oam_updated) update_oam();
 
    gfxDrawSprites();
    if (renderer_type == 2)
