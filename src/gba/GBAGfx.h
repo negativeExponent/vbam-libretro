@@ -13,7 +13,7 @@ struct lcd_background_t
     int priority;
     int char_base;
     int mosaic;
-    int palette256;
+    int color256;
     int screen_base;
     int overflow;
     int screen_size;
@@ -120,7 +120,6 @@ extern uint32_t lineOBJ[240];
 extern uint32_t lineOBJWin[240];
 extern bool gfxInWin0[240];
 extern bool gfxInWin1[240];
-extern int lineOBJpixleft[128];
 extern uint16_t systemColorMap16[0x10000];
 
 extern bool oam_updated;
