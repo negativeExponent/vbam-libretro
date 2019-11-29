@@ -1384,6 +1384,28 @@ void updateInput_SolarSensor(void)
     }
 }
 
+// is rumble requested?
+static bool rumble_state;
+// delay in frames to turn off rumble effect since last enabled
+static unsigned rumble_offtimer;
+
+static void updateRumbleState()
+{
+    // if rumble is requested, reset timer
+    if (rumble_state)
+        rumble_offtimer = 5; // delay for 4 frames
+    // TODO: Update rumble strength based on how many ON request
+}
+
+static void updateRumble()
+{
+    if (!rumble_cb) return;
+    int rumble = rumble_offtimer ? 0xFFFF : 0;
+    rumble_cb(0, RETRO_RUMBLE_STRONG, rumble);
+    rumble_cb(0, RETRO_RUMBLE_WEAK, rumble);
+    if (rumble_offtimer) --rumble_offtimer;
+}
+
 static bool firstrun = true;
 static unsigned has_frame;
 
@@ -1424,6 +1446,8 @@ void retro_run(void)
         updateInput_SolarSensor();
     if (hardware & HW_TILT || hardware & HW_GYRO)
         updateInput_MotionSensors();
+    if (hardware & HW_RUMBLE)
+        updateRumble();
 
     has_frame = 0;
 
@@ -1610,6 +1634,10 @@ bool retro_load_game(const struct retro_game_info *game)
       core = &GBSystem;
 
       gb_init();
+
+      hardware = HW_NONE;        
+      if (gbDataMBC5.isRumbleCartridge) hardware |= HW_RUMBLE;
+      if (gbRomType == 0x22) hardware |= HW_TILT;
 
       unsigned addr, i;
       struct retro_memory_descriptor desc[18];
@@ -1875,19 +1903,11 @@ void systemUpdateMotionSensor(void)
 
 void systemCartridgeRumble(bool e)
 {
-    if (!rumble_cb)
-        return;
-    
     if (!(hardware & HW_RUMBLE))
         return;
-
-    if (e) {
-        rumble_cb(0, RETRO_RUMBLE_WEAK, 0xffff);
-        rumble_cb(0, RETRO_RUMBLE_STRONG, 0xffff);
-    } else {
-        rumble_cb(0, RETRO_RUMBLE_WEAK, 0);
-        rumble_cb(0, RETRO_RUMBLE_STRONG, 0);
-    }
+    
+    rumble_state = e;
+    updateRumbleState();
 }
 
 bool systemPauseOnFrame(void)
