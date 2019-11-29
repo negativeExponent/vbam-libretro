@@ -17,6 +17,9 @@ struct lcd_background_t
     int screen_base;
     int overflow;
     int screen_size;
+    // screen dimensions
+    int sizeX;
+    int sizeY;
 
     // Horizontal/Vertical Offsets    
     uint16_t hofs;
@@ -46,7 +49,13 @@ struct gba_lcd_t
     uint16_t winin;
     uint16_t winout;
 
-    uint16_t mosaic;
+    // BG mosaic size
+    uint8_t bg_mosaic_hsize;
+    uint8_t bg_mosaic_vsize;
+    
+    // OBJ mosaic size
+    uint8_t obj_mosaic_hsize;
+    uint8_t obj_mosaic_vsize;
 
     uint16_t bldcnt;
     uint16_t bldalpha;
@@ -105,6 +114,7 @@ void LCDUpdateBGX_L(int, uint16_t);
 void LCDUpdateBGX_H(int, uint16_t);
 void LCDUpdateBGY_L(int, uint16_t);
 void LCDUpdateBGY_H(int, uint16_t);
+void LCDUpdateMOSAIC(uint16_t);
 void LCDUpdateWindow0();
 void LCDUpdateWindow1();
 bool LCDUpdateInWindow(int, uint16_t, uint32_t);

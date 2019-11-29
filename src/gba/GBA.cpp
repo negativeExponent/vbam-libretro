@@ -311,7 +311,7 @@ variable_desc saveGameStruct[] = {
    { &lcd.winv[1], sizeof(uint16_t) },
    { &lcd.winin, sizeof(uint16_t) },
    { &lcd.winout, sizeof(uint16_t) },
-   { &lcd.mosaic, sizeof(uint16_t) },
+   SKIP_u16(MOSAIC),
    { &lcd.bldcnt, sizeof(uint16_t) },
    { &lcd.bldalpha, sizeof(uint16_t) },
    { &lcd.bldy, sizeof(uint16_t) },

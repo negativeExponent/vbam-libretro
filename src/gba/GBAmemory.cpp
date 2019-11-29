@@ -191,7 +191,7 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         lcd.winout = value;
         break;
     case REG_MOSAIC:
-        lcd.mosaic = value;
+        LCDUpdateMOSAIC(value);
         break;
     case REG_BLDCNT:
         value &= 0x3FFF;
@@ -211,15 +211,24 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
     case REG_SOUND1CNT_L:
     case REG_SOUND1CNT_H:
     case REG_SOUND1CNT_X:
+    case REG_SOUND1CNT_X + 2:
     case REG_SOUND2CNT_L:
+    case REG_SOUND2CNT_L + 2:
     case REG_SOUND2CNT_H:
+    case REG_SOUND2CNT_H + 2:
     case REG_SOUND3CNT_L:
     case REG_SOUND3CNT_H:
     case REG_SOUND3CNT_X:
+    case REG_SOUND3CNT_X + 2:
     case REG_SOUND4CNT_L:
+    case REG_SOUND4CNT_L + 2:
     case REG_SOUND4CNT_H:
+    case REG_SOUND4CNT_H + 2:
     case REG_SOUNDCNT_L:
     case REG_SOUNDCNT_X:
+    case REG_SOUNDCNT_X + 2:
+    case REG_SOUNDBIAS + 2:
+    case REG_FIFO_B_H + 2:
         soundEvent8(address & 0xFF, (uint8_t)(value & 0xFF));
         soundEvent8((address & 0xFF) + 1, (uint8_t)(value >> 8));
         return;
