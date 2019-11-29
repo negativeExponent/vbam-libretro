@@ -45,38 +45,6 @@ extern uint8_t* oam;
 extern uint8_t* ioMem;
 extern pixFormat* pix;
 
-extern uint16_t DM0SAD_L;
-extern uint16_t DM0SAD_H;
-extern uint16_t DM0DAD_L;
-extern uint16_t DM0DAD_H;
-extern uint16_t DM0CNT_L;
-extern uint16_t DM0CNT_H;
-extern uint16_t DM1SAD_L;
-extern uint16_t DM1SAD_H;
-extern uint16_t DM1DAD_L;
-extern uint16_t DM1DAD_H;
-extern uint16_t DM1CNT_L;
-extern uint16_t DM1CNT_H;
-extern uint16_t DM2SAD_L;
-extern uint16_t DM2SAD_H;
-extern uint16_t DM2DAD_L;
-extern uint16_t DM2DAD_H;
-extern uint16_t DM2CNT_L;
-extern uint16_t DM2CNT_H;
-extern uint16_t DM3SAD_L;
-extern uint16_t DM3SAD_H;
-extern uint16_t DM3DAD_L;
-extern uint16_t DM3DAD_H;
-extern uint16_t DM3CNT_L;
-extern uint16_t DM3CNT_H;
-extern uint16_t TM0D;
-extern uint16_t TM0CNT;
-extern uint16_t TM1D;
-extern uint16_t TM1CNT;
-extern uint16_t TM2D;
-extern uint16_t TM2CNT;
-extern uint16_t TM3D;
-extern uint16_t TM3CNT;
 extern uint16_t P1;
 extern uint16_t IE;
 extern uint16_t IF;
@@ -177,6 +145,7 @@ enum io_registers
     REG_TM2CNT_H    = 0x10A,
     REG_TM3CNT_L    = 0x10C,
     REG_TM3CNT_H    = 0x10E,
+    REG_SIOCNT      = 0x128,
     REG_KEYINPUT    = 0x130,
     REG_KEYCNT      = 0x132,
     REG_RCNT        = 0x134,

@@ -250,129 +250,129 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         return;
 
     case REG_DMA0SAD_L:
-        DM0SAD_L = value;
+        dma[0].DMASAD_L = value;
         break;
     case REG_DMA0SAD_H:
         value &= 0x07FF;
-        DM0SAD_H = value;
+        dma[0].DMASAD_H = value;
         break;
     case REG_DMA0DAD_L:
-        DM0DAD_L = value;
+        dma[0].DMADAD_L = value;
         break;
     case REG_DMA0DAD_H:
         value &= 0x07FF;
-        DM0DAD_H = value;
+        dma[0].DMADAD_H = value;
         break;
     case REG_DMA0CNT_L:
-        DM0CNT_L = value & 0x3FFF;
+        dma[0].DMACNT_L = value & 0x3FFF;
         value = 0;
         break;
     case REG_DMA0CNT_H: {
-        bool start = ((DM0CNT_H ^ value) & 0x8000) ? true : false;
+        bool start = ((dma[0].DMACNT_H ^ value) & 0x8000) ? true : false;
         value &= 0xF7E0;
 
-        DM0CNT_H = value;
-        UPDATE_REG(REG_DMA0CNT_H, DM0CNT_H);
+        dma[0].DMACNT_H = value;
+        UPDATE_REG(REG_DMA0CNT_H, dma[0].DMACNT_H);
 
         if (start && (value & 0x8000)) {
-            dma[0].Source = DM0SAD_L | (DM0SAD_H << 16);
-            dma[0].Dest = DM0DAD_L | (DM0DAD_H << 16);
+            dma[0].Source = dma[0].DMASAD_L | (dma[0].DMASAD_H << 16);
+            dma[0].Dest = dma[0].DMADAD_L | (dma[0].DMADAD_H << 16);
             CPUCheckDMA(0, 1);
         }
     } return;
     case REG_DMA1SAD_L:
-        DM1SAD_L = value;
+        dma[1].DMASAD_L = value;
         break;
     case REG_DMA1SAD_H:
         value &= 0x0FFF;
-        DM1SAD_H = value;
+        dma[1].DMASAD_H = value;
         break;
     case REG_DMA1DAD_L:
-        DM1DAD_L = value;
+        dma[1].DMADAD_L = value;
         break;
     case REG_DMA1DAD_H:
         value &= 0x07FF;
-        DM1DAD_H = value;
+        dma[1].DMADAD_H = value;
         break;
     case REG_DMA1CNT_L:
-        DM1CNT_L = value & 0x3FFF;
+        dma[1].DMACNT_L = value & 0x3FFF;
         value = 0;
         break;
     case REG_DMA1CNT_H: {
-        bool start = ((DM1CNT_H ^ value) & 0x8000) ? true : false;
+        bool start = ((dma[1].DMACNT_H ^ value) & 0x8000) ? true : false;
         value &= 0xF7E0;
 
-        DM1CNT_H = value;
-        UPDATE_REG(REG_DMA1CNT_H, DM1CNT_H);
+        dma[1].DMACNT_H = value;
+        UPDATE_REG(REG_DMA1CNT_H, dma[1].DMACNT_H);
 
         if (start && (value & 0x8000)) {
-            dma[1].Source = DM1SAD_L | (DM1SAD_H << 16);
-            dma[1].Dest = DM1DAD_L | (DM1DAD_H << 16);
+            dma[1].Source = dma[1].DMASAD_L | (dma[1].DMASAD_H << 16);
+            dma[1].Dest = dma[1].DMADAD_L | (dma[1].DMADAD_H << 16);
             CPUCheckDMA(0, 2);
         }
     } return;
     case REG_DMA2SAD_L:
-        DM2SAD_L = value;
+        dma[2].DMASAD_L = value;
         break;
     case REG_DMA2SAD_H:
         value &= 0x0FFF;
-        DM2SAD_H = value;
+        dma[2].DMASAD_H = value;
         break;
     case REG_DMA2DAD_L:
-        DM2DAD_L = value;
+        dma[2].DMADAD_L = value;
         break;
     case REG_DMA2DAD_H:
         value &= 0x07FF;
-        DM2DAD_H = value;
+        dma[2].DMADAD_H = value;
         break;
     case REG_DMA2CNT_L:
-        DM2CNT_L = value & 0x3FFF;
+        dma[2].DMACNT_L = value & 0x3FFF;
         value = 0;
         break;
     case REG_DMA2CNT_H: {
-        bool start = ((DM2CNT_H ^ value) & 0x8000) ? true : false;
+        bool start = ((dma[2].DMACNT_H ^ value) & 0x8000) ? true : false;
 
         value &= 0xF7E0;
 
-        DM2CNT_H = value;
-        UPDATE_REG(REG_DMA2CNT_H, DM2CNT_H);
+        dma[2].DMACNT_H = value;
+        UPDATE_REG(REG_DMA2CNT_H, dma[2].DMACNT_H);
 
         if (start && (value & 0x8000)) {
-            dma[2].Source = DM2SAD_L | (DM2SAD_H << 16);
-            dma[2].Dest = DM2DAD_L | (DM2DAD_H << 16);
+            dma[2].Source = dma[2].DMASAD_L | (dma[2].DMASAD_H << 16);
+            dma[2].Dest = dma[2].DMADAD_L | (dma[2].DMADAD_H << 16);
 
             CPUCheckDMA(0, 4);
         }
     } return;
     case REG_DMA3SAD_L:
-        DM3SAD_L = value;
+        dma[3].DMASAD_L = value;
         break;
     case REG_DMA3SAD_H:
         value &= 0x0FFF;
-        DM3SAD_H = value;
+        dma[3].DMASAD_H = value;
         break;
     case REG_DMA3DAD_L:
-        DM3DAD_L = value;
+        dma[3].DMADAD_L = value;
         break;
     case REG_DMA3DAD_H:
         value &= 0x0FFF;
-        DM3DAD_H = value;
+        dma[3].DMADAD_H = value;
         break;
     case REG_DMA3CNT_L:
-        DM3CNT_L = value;
+        dma[3].DMACNT_L = value;
         value = 0;
         break;
     case REG_DMA3CNT_H: {
-        bool start = ((DM3CNT_H ^ value) & 0x8000) ? true : false;
+        bool start = ((dma[3].DMACNT_H ^ value) & 0x8000) ? true : false;
 
         value &= 0xFFE0;
 
-        DM3CNT_H = value;
+        dma[3].DMACNT_H = value;
         UPDATE_REG(REG_DMA3CNT_H, value);
 
         if (start && (value & 0x8000)) {
-            dma[3].Source = DM3SAD_L | (DM3SAD_H << 16);
-            dma[3].Dest = DM3DAD_L | (DM3DAD_H << 16);
+            dma[3].Source = dma[3].DMASAD_L | (dma[3].DMASAD_H << 16);
+            dma[3].Dest = dma[3].DMADAD_L | (dma[3].DMADAD_H << 16);
             CPUCheckDMA(0, 8);
         }
     } return;
@@ -412,54 +412,17 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         cpuNextEvent = cpuTotalTicks;
         return;
 
-#ifndef NO_LINK
-    /*case COMM_SIOCNT:
-        StartLink(value);
+    case REG_SIOCNT:
+        if ((value & 0x80) == 0)
+             return;
+        value &= 0xff7f;
+        if ((value & 0x4001) == 0x4001)
+        {
+            IF |= 0x80;
+            UPDATE_REG(REG_IF, IF);
+            value &= 0x7f7f;
+        }
         break;
-
-    case COMM_SIODATA8:
-        UPDATE_REG(COMM_SIODATA8, value);
-        break;
-
-    case COMM_RCNT:
-        StartGPLink(value);
-        break;
-
-    case COMM_JOYCNT: {
-        uint16_t cur = READ16LE(&ioMem[COMM_JOYCNT]);
-
-        if (value & JOYCNT_RESET)
-            cur &= ~JOYCNT_RESET;
-        if (value & JOYCNT_RECV_COMPLETE)
-            cur &= ~JOYCNT_RECV_COMPLETE;
-        if (value & JOYCNT_SEND_COMPLETE)
-            cur &= ~JOYCNT_SEND_COMPLETE;
-        if (value & JOYCNT_INT_ENABLE)
-            cur |= JOYCNT_INT_ENABLE;
-
-        UPDATE_REG(COMM_JOYCNT, cur);
-    } break;
-
-    case COMM_JOY_RECV_L:
-        UPDATE_REG(COMM_JOY_RECV_L, value);
-        break;
-    case COMM_JOY_RECV_H:
-        UPDATE_REG(COMM_JOY_RECV_H, value);
-        break;
-
-    case COMM_JOY_TRANS_L:
-        UPDATE_REG(COMM_JOY_TRANS_L, value);
-        UPDATE_REG(COMM_JOYSTAT, READ16LE(&ioMem[COMM_JOYSTAT]) | JOYSTAT_SEND);
-        break;
-    case COMM_JOY_TRANS_H:
-        UPDATE_REG(COMM_JOY_TRANS_H, value);
-        UPDATE_REG(COMM_JOYSTAT, READ16LE(&ioMem[COMM_JOYSTAT]) | JOYSTAT_SEND);
-        break;
-
-    case COMM_JOYSTAT:
-        UPDATE_REG(COMM_JOYSTAT, (READ16LE(&ioMem[COMM_JOYSTAT]) & 0x0a) | (value & ~0x0a));
-        break;*/
-#endif
 
     case REG_KEYINPUT:
         value &= 0x3FF;
@@ -683,19 +646,19 @@ uint32_t CPUReadHalfWord(uint32_t address)
                      }
                      break;
                   case 0x104:
-                     if (timers.tm[1].On && !(TM1CNT & 4))
+                     if (timers.tm[1].On && !(timers.tm[1].TMCNT_H & 4))
                      {
                         value = 0xFFFF - ((timers.tm[1].Ticks - cpuTotalTicks) >> timers.tm[1].ClockReload);
                      }
                      break;
                   case 0x108:
-                     if (timers.tm[2].On && !(TM2CNT & 4))
+                     if (timers.tm[2].On && !(timers.tm[2].TMCNT_H & 4))
                      {
                         value = 0xFFFF - ((timers.tm[2].Ticks - cpuTotalTicks) >> timers.tm[2].ClockReload);
                      }
                      break;
                   case 0x10C:
-                     if (timers.tm[3].On && !(TM3CNT & 4))
+                     if (timers.tm[3].On && !(timers.tm[3].TMCNT_H & 4))
                      {
                         value = 0xFFFF - ((timers.tm[3].Ticks - cpuTotalTicks) >> timers.tm[3].ClockReload);
                      }

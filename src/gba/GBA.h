@@ -121,6 +121,8 @@ struct gba_timers_t
 {
     struct timers_t
     {
+        uint16_t TMCNT_L;
+        uint16_t TMCNT_H;
         uint16_t Value;
         bool On;
         int Ticks;
@@ -132,6 +134,12 @@ struct gba_timers_t
 
 struct gba_dma_t
 {
+    uint16_t DMASAD_L;
+    uint16_t DMASAD_H;
+    uint16_t DMADAD_L;
+    uint16_t DMADAD_H;
+    uint16_t DMACNT_L;
+    uint16_t DMACNT_H;
     uint32_t Source;
     uint32_t Dest;
 };

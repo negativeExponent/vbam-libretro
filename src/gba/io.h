@@ -1,7 +1,9 @@
 #ifndef IO_H
 #define IO_H
 
-enum io_registers
+#include "System.h";
+
+enum
 {
     REG_DISPCNT     = 0x000,
     REG_GREENSWAP   = 0x002,
