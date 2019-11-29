@@ -80,6 +80,7 @@ int systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
 int systemSpeed = 0;
 int emulating = 0;
 int romSize = 0;
+int hardware = HW_NONE;
 
 void (*dbgOutput)(const char* s, uint32_t addr);
 void (*dbgSignal)(int sig, int number);
@@ -785,7 +786,6 @@ static void load_image_preferences(void)
     };
 
     bool found = false;
-    bool hasRumble = false;
     char buffer[12 + 1];
     unsigned i = 0, found_no = 0;
     unsigned long romCrc32 = crc32(0, rom, romSize);
@@ -795,6 +795,7 @@ static void load_image_preferences(void)
     eepromSize = SIZE_EEPROM_512;
     rtcEnabled = false;
     mirroringEnable = false;
+    hardware = HW_NONE;
 
     log("File CRC32      : 0x%08X\n", romCrc32);
 
@@ -859,11 +860,21 @@ static void load_image_preferences(void)
 
     rtcEnable(rtcEnabled);
 
-    // game code starting with 'R' or 'V' has rumble support
-    if ((buffer[0] == 'R') || (buffer[0] == 'V'))
-        hasRumble = true;
+    // Setup hardware sensors based on 1st character of game ID    
+    // Yoshi and Koro Koro Puzzle, tilt/accelerator
+    if (buffer[0] == 'K')
+        hardware = HW_TILT;
+    // Wario Twister rumble + gyro
+    if (buffer[0] == 'R')
+        hardware = HW_RUMBLE | HW_GYRO;
+    // Boktai 1 and 2, RTC + solar sensor
+    if (buffer[0] == 'U')
+        hardware = HW_SOLAR_SENSOR;
+    // Drill Dozer, rumble
+    if (buffer[0] == 'V')
+        hardware = HW_RUMBLE;
 
-    rtcEnableRumble(!rtcEnabled && hasRumble);
+    rtcEnableRumble(!rtcEnabled && (hardware & HW_RUMBLE));
 
     doMirroring(mirroringEnable);
 
@@ -1409,8 +1420,10 @@ void retro_run(void)
 
     poll_cb();
 
-    updateInput_SolarSensor();
-    updateInput_MotionSensors();
+    if (hardware & HW_SOLAR_SENSOR)
+        updateInput_SolarSensor();
+    if (hardware & HW_TILT || hardware & HW_GYRO)
+        updateInput_MotionSensors();
 
     has_frame = 0;
 
@@ -1863,6 +1876,9 @@ void systemUpdateMotionSensor(void)
 void systemCartridgeRumble(bool e)
 {
     if (!rumble_cb)
+        return;
+    
+    if (!(hardware & HW_RUMBLE))
         return;
 
     if (e) {
