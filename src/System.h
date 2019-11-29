@@ -18,17 +18,10 @@ struct EmulatedSystem {
         bool (*emuReadBattery)(const char *);
         // write battery file
         bool (*emuWriteBattery)(const char *);
-#ifdef __LIBRETRO__
         // load state
         bool (*emuReadState)(const uint8_t *, unsigned);
         // load state
         unsigned (*emuWriteState)(uint8_t *, unsigned);
-#else
-        // load state
-        bool (*emuReadState)(const char *);
-        // save state
-        bool (*emuWriteState)(const char *);
-#endif
         // load memory state (rewind)
         bool (*emuReadMemState)(char *, int);
         // write memory state (rewind)

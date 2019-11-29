@@ -17,9 +17,11 @@
 #include "../apu/Gb_Oscs.h"
 #include "../common/Port.h"
 #include "../common/ConfigManager.h"
+
 #include "../gba/Cheats.h"
 #include "../gba/EEprom.h"
 #include "../gba/Flash.h"
+#include "../gba/GBA.h"
 #include "../gba/GBAGfx.h"
 #include "../gba/Globals.h"
 #include "../gba/RTC.h"
@@ -565,6 +567,9 @@ void retro_get_system_info(struct retro_system_info *info)
 {
    info->need_fullpath = false;
    info->valid_extensions = "dmg|gb|gbc|cgb|sgb|gba";
+#ifndef VBAM_VERSION
+#define VBAM_VERSION "2.1.3"
+#endif
 #ifdef GIT_COMMIT
    info->library_version = VBAM_VERSION " " GIT_COMMIT;
 #else
@@ -756,17 +761,15 @@ static const char *gbGetSaveRamSize(void)
     return (type);
 }
 
-typedef struct {
+typedef struct  {
     char romtitle[256];
     char romid[5];
     int saveSize; // also can override eeprom size
     int saveType;  // 0auto 1eeprom 2sram 3flash 4sensor+eeprom 5none
-    int rtcEnabled;
-    int mirroringEnabled;
-    int useBios;
+    bool rtcEnabled;
 } ini_t;
 
-static const ini_t gbaover[512] = {
+static const ini_t gbaover[] = {
     #include "gba-over.inc"
 };
 
@@ -813,6 +816,7 @@ static void load_image_preferences(void)
     log("Game Code       : %s\n", buffer);
 
     for (i = 0; i < 512; i++) {
+        if (gbaover[i].romid == NULL) break;
         if (!strcmp(gbaover[i].romid, buffer)) {
             found = true;
             found_no = i;
@@ -836,7 +840,11 @@ static void load_image_preferences(void)
     }
 
     // gameID that starts with 'F' are classic/famicom games
-    mirroringEnable = (buffer[0] == 'F') ? true : false;
+    if (buffer[0] == 'F')
+    {
+        mirroringEnable = true;
+        cpuSaveType = GBA_SAVE_EEPROM;
+    }
 
     if (!cpuSaveType)
         utilGBAFindSave(romSize);
