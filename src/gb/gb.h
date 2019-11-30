@@ -36,13 +36,8 @@ void gbGetHardwareType();
 void gbReset();
 void gbCleanUp();
 void gbCPUInit(const char*, bool);
-#ifdef __LIBRETRO__
 unsigned int gbWriteSaveState(uint8_t*, unsigned);
 bool gbReadSaveState(const uint8_t*, unsigned);
-#else
-bool gbWriteSaveState(const char*);
-bool gbReadSaveState(const char*);
-#endif
 bool gbWriteBatteryFile(const char*);
 bool gbWriteBatteryFile(const char*, bool);
 bool gbReadBatteryFile(const char*);

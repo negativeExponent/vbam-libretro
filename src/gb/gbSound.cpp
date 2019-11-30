@@ -246,155 +246,6 @@ static char dummy_state[735 * 2];
         &name, sizeof(type) \
     }
 
-#ifndef __LIBRETRO__
-// Old save state support
-
-static variable_desc gbsound_format[] = {
-    SKIP(int, soundPaused),
-    SKIP(int, soundPlay),
-    SKIP(int, soundTicks),
-    SKIP(int, SOUND_CLOCK_TICKS),
-    SKIP(int, soundLevel1),
-    SKIP(int, soundLevel2),
-    SKIP(int, soundBalance),
-    SKIP(int, soundMasterOn),
-    SKIP(int, soundIndex),
-    SKIP(int, soundVIN),
-    SKIP(int, soundOn[0]),
-    SKIP(int, soundATL[0]),
-    SKIP(int, sound1Skip),
-    SKIP(int, soundIndex[0]),
-    SKIP(int, sound1Continue),
-    SKIP(int, soundEnvelopeVolume[0]),
-    SKIP(int, soundEnvelopeATL[0]),
-    SKIP(int, sound1EnvelopeATLReload),
-    SKIP(int, sound1EnvelopeUpDown),
-    SKIP(int, sound1SweepATL),
-    SKIP(int, sound1SweepATLReload),
-    SKIP(int, sound1SweepSteps),
-    SKIP(int, sound1SweepUpDown),
-    SKIP(int, sound1SweepStep),
-    SKIP(int, soundOn[1]),
-    SKIP(int, soundATL[1]),
-    SKIP(int, sound2Skip),
-    SKIP(int, soundIndex[1]),
-    SKIP(int, sound2Continue),
-    SKIP(int, soundEnvelopeVolume[1]),
-    SKIP(int, soundEnvelopeATL[1]),
-    SKIP(int, sound2EnvelopeATLReload),
-    SKIP(int, sound2EnvelopeUpDown),
-    SKIP(int, soundOn[2]),
-    SKIP(int, soundATL[2]),
-    SKIP(int, sound3Skip),
-    SKIP(int, soundIndex[2]),
-    SKIP(int, sound3Continue),
-    SKIP(int, sound3OutputLevel),
-    SKIP(int, soundOn[3]),
-    SKIP(int, soundATL[3]),
-    SKIP(int, sound4Skip),
-    SKIP(int, soundIndex[3]),
-    SKIP(int, sound4Clock),
-    SKIP(int, sound4ShiftRight),
-    SKIP(int, sound4ShiftSkip),
-    SKIP(int, sound4ShiftIndex),
-    SKIP(int, sound4NSteps),
-    SKIP(int, sound4CountDown),
-    SKIP(int, sound4Continue),
-    SKIP(int, soundEnvelopeVolume[2]),
-    SKIP(int, soundEnvelopeATL[2]),
-    SKIP(int, sound4EnvelopeATLReload),
-    SKIP(int, sound4EnvelopeUpDown),
-    SKIP(int, soundEnableFlag),
-    { NULL, 0 }
-};
-
-static variable_desc gbsound_format2[] = {
-    SKIP(int, sound1ATLreload),
-    SKIP(int, freq1low),
-    SKIP(int, freq1high),
-    SKIP(int, sound2ATLreload),
-    SKIP(int, freq2low),
-    SKIP(int, freq2high),
-    SKIP(int, sound3ATLreload),
-    SKIP(int, freq3low),
-    SKIP(int, freq3high),
-    SKIP(int, sound4ATLreload),
-    SKIP(int, freq4),
-    { NULL, 0 }
-};
-
-static variable_desc gbsound_format3[] = {
-    SKIP(uint8_t[2 * 735], soundBuffer),
-    SKIP(uint8_t[2 * 735], soundBuffer),
-    SKIP(uint16_t[735], soundFinalWave),
-    { NULL, 0 }
-};
-
-enum {
-    nr10 = 0,
-    nr11,
-    nr12,
-    nr13,
-    nr14,
-    nr20,
-    nr21,
-    nr22,
-    nr23,
-    nr24,
-    nr30,
-    nr31,
-    nr32,
-    nr33,
-    nr34,
-    nr40,
-    nr41,
-    nr42,
-    nr43,
-    nr44,
-    nr50,
-    nr51,
-    nr52
-};
-
-static void gbSoundReadGameOld(int version, gzFile gzFile)
-{
-    if (version == 11) {
-        // Version 11 didn't save any state
-        // TODO: same for version 10?
-        state.apu.regs[nr50] = 0x77; // volume at max
-        state.apu.regs[nr51] = 0xFF; // channels enabled
-        state.apu.regs[nr52] = 0x80; // power on
-        return;
-    }
-
-    // Load state
-    utilReadData(gzFile, gbsound_format);
-
-    if (version >= 11) // TODO: never executed; remove?
-        utilReadData(gzFile, gbsound_format2);
-
-    utilReadData(gzFile, gbsound_format3);
-
-    int quality = 1;
-    if (version >= 7)
-        quality = utilReadInt(gzFile);
-
-    gbSoundSetSampleRate(44100 / quality);
-
-    // Convert to format Gb_Apu uses
-    gb_apu_state_t& s = state.apu;
-
-    // Only some registers are properly preserved
-    static int const regs_to_copy[] = {
-        nr10, nr11, nr12, nr21, nr22, nr30, nr32, nr42, nr43, nr50, nr51, nr52, -1
-    };
-    for (int i = 0; regs_to_copy[i] >= 0; i++)
-        s.regs[regs_to_copy[i]] = gbMemory[0xFF10 + regs_to_copy[i]];
-
-    memcpy(&s.regs[0x20], &gbMemory[0xFF30], 0x10); // wave
-}
-#endif
-
 // New state format
 static variable_desc gb_state[] = {
     LOAD(int, state.version), // room_for_expansion will be used by later versions
@@ -429,11 +280,7 @@ static variable_desc gb_state[] = {
     { NULL, 0 }
 };
 
-#ifdef __LIBRETRO__
 void gbSoundSaveGame(uint8_t*& out)
-#else
-void gbSoundSaveGame(gzFile out)
-#endif
 {
     gb_apu->save_state(&state.apu);
 
@@ -441,31 +288,14 @@ void gbSoundSaveGame(gzFile out)
     memset(dummy_state, 0, sizeof dummy_state);
 
     state.version = 1;
-#ifdef __LIBRETRO__
     utilWriteDataMem(out, gb_state);
-#else
-    utilWriteData(out, gb_state);
-#endif
 }
 
-#ifdef __LIBRETRO__
 void gbSoundReadGame(const uint8_t*& in, int version)
-#else
-void gbSoundReadGame(int version, gzFile in)
-#endif
 {
     // Prepare APU and default state
     reset_apu();
     gb_apu->save_state(&state.apu);
-
-#ifdef __LIBRETRO__
     utilReadDataMem(in, gb_state);
-#else
-    if (version > 11)
-        utilReadData(in, gb_state);
-    else
-        gbSoundReadGameOld(version, in);
-#endif
-
     gb_apu->load_state(state.apu);
 }

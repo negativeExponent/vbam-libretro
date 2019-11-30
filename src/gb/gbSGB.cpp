@@ -821,7 +821,6 @@ variable_desc gbSgbSaveStructV3[] = {
     { NULL, 0 }
 };
 
-#ifdef __LIBRETRO__
 void gbSgbSaveGame(uint8_t*& data)
 {
     utilWriteDataMem(data, gbSgbSaveStructV3);
@@ -849,40 +848,3 @@ void gbSgbReadGame(const uint8_t*& data, int version)
     utilReadMem(gbSgbATF, data, 20 * 18);
     utilReadMem(gbSgbATFList, data, 45 * 20 * 18);
 }
-
-#else // !__LIBRETRO__
-void gbSgbSaveGame(gzFile gzFile)
-{
-    utilWriteData(gzFile, gbSgbSaveStructV3);
-
-    utilGzWrite(gzFile, gbSgbBorder, 2048);
-    utilGzWrite(gzFile, gbSgbBorderChar, 32 * 256);
-
-    utilGzWrite(gzFile, gbSgbPacket, 16 * 7);
-
-    utilGzWrite(gzFile, gbSgbSCPPalette, 4 * 512 * sizeof(uint16_t));
-    utilGzWrite(gzFile, gbSgbATF, 20 * 18);
-    utilGzWrite(gzFile, gbSgbATFList, 45 * 20 * 18);
-}
-
-void gbSgbReadGame(gzFile gzFile, int version)
-{
-    if (version >= 3)
-        utilReadData(gzFile, gbSgbSaveStructV3);
-    else {
-        utilReadData(gzFile, gbSgbSaveStruct);
-        gbSgbFourPlayers = 0;
-    }
-
-    if (version >= 8) {
-        utilGzRead(gzFile, gbSgbBorder, 2048);
-        utilGzRead(gzFile, gbSgbBorderChar, 32 * 256);
-    }
-
-    utilGzRead(gzFile, gbSgbPacket, 16 * 7);
-
-    utilGzRead(gzFile, gbSgbSCPPalette, 4 * 512 * sizeof(uint16_t));
-    utilGzRead(gzFile, gbSgbATF, 20 * 18);
-    utilGzRead(gzFile, gbSgbATFList, 45 * 20 * 18);
-}
-#endif // !__LIBRETRO__
