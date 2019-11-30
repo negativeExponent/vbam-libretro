@@ -67,8 +67,7 @@ extern int gbBorderRowSkip;
 extern int gbBorderColumnSkip;
 extern int gbDmaTicks;
 
-extern void gbRenderLine();
-extern void gbDrawSprites(bool);
+extern void gbRenderLine(bool);
 
 extern uint8_t (*gbSerialFunction)(uint8_t);
 

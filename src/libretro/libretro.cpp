@@ -1749,11 +1749,12 @@ bool systemCanChangeSoundQuality(void)
 void systemDrawScreen(uint16_t* pix)
 {
     video_cb(pix, systemWidth, systemHeight, systemWidth << 1);
+    has_frame++;
 }
 
 void systemFrame(void)
 {
-    has_frame = 1;
+    has_frame++;
 }
 
 void systemGbBorderOn(void)

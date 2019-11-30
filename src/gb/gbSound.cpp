@@ -24,10 +24,12 @@ static bool declicking = false;
 int const chan_count = 4;
 int const ticks_to_time = 2 * GB_APU_OVERCLOCK;
 
+#define BLIP_TIME ((SOUND_CLOCK_TICKS - soundTicks) * ticks_to_time)
+
 uint8_t gbSoundRead(int st, uint16_t address)
 {
     if (gb_apu && address >= NR10 && address <= 0xFF3F)
-        return gb_apu->read_register((blip_time_t)(st * ticks_to_time), address);
+        return gb_apu->read_register((blip_time_t)BLIP_TIME, address);
 
     return gbMemory[address];
 }
@@ -37,7 +39,7 @@ void gbSoundEvent(int st, uint16_t address, int data)
     gbMemory[address] = data;
 
     if (gb_apu && address >= NR10 && address <= 0xFF3F)
-        gb_apu->write_register((blip_time_t)(st * ticks_to_time), address, data);
+        gb_apu->write_register((blip_time_t)BLIP_TIME, address, data);
 }
 
 static void end_frame(blip_time_t time)
@@ -78,11 +80,11 @@ static void apply_volume()
         gb_apu->volume(soundVolume_);
 }
 
-void gbSoundTick(int st)
+void gbSoundTick()
 {
     if (gb_apu && stereo_buffer) {
         // Run sound hardware to present
-        end_frame((blip_time_t)(st * ticks_to_time));
+        end_frame((blip_time_t)(SOUND_CLOCK_TICKS * ticks_to_time));
 
         flush_samples(stereo_buffer);
 
@@ -95,8 +97,6 @@ void gbSoundTick(int st)
         if (soundVolume_ != soundGetVolume())
             apply_volume();
     }
-
-    soundTicks = 0;
 }
 
 static void reset_apu()
@@ -112,7 +112,7 @@ static void reset_apu()
     if (stereo_buffer)
         stereo_buffer->clear();
 
-    soundTicks = 0;
+    soundTicks = SOUND_CLOCK_TICKS;
 }
 
 static void remake_stereo_buffer()
