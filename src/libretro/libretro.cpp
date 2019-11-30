@@ -166,7 +166,7 @@ struct palettes_t {
     uint16_t    data[8];
 };
 
-static struct palettes_t defaultGBPalettes[] = {
+static palettes_t defaultGBPalettes[] = {
     {
         "Standard",
         { 0x7FFF, 0x56B5, 0x318C, 0x0000, 0x7FFF, 0x56B5, 0x318C, 0x0000 },

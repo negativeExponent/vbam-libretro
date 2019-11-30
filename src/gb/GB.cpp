@@ -526,7 +526,7 @@ void gbWriteMemory(uint16_t address, uint8_t value)
 
          gbSerialBits = 0;
          return;
-#endif
+#endif // NO_LINK
       }
 
       case 0x04:
@@ -1894,7 +1894,7 @@ void gbReset()
       EmuReseted = true;
       gbInitLink();
    }
-#endif
+#endif // NO_LINK
 
    gbGetHardwareType();
 
@@ -2334,11 +2334,6 @@ void gbReset()
    }
    else
    {
-      if (gbSgbMode)
-      {
-         for (i = 0; i < 8; i++)
-            gbPalette[i] = systemGbPalette[gbPaletteOption * 8 + i];
-      }
       for (i = 0; i < 8; i++)
          gbPalette[i] = systemGbPalette[gbPaletteOption * 8 + i];
    }
@@ -5123,7 +5118,7 @@ void gbEmulate(int ticksToStop)
             }
 #endif
          }
-#endif
+#endif // NO_LINK
 
       soundTicks -= (clockTicks << (1 - gbSpeed));
       while (soundTicks < 0)
