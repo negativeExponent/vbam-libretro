@@ -13,11 +13,11 @@
 #include "../gba/Sound.h"
 #include "gb.h"
 #include "gbCheats.h"
+#include "gbConstants.h"
 #include "gbGlobals.h"
 #include "gbMemory.h"
 #include "gbSGB.h"
 #include "gbSound.h"
-#include "gbConstants.h"
 
 #ifdef __GNUC__
 #define _stricmp strcasecmp
@@ -276,9 +276,11 @@ void gbGenFilter()
          {
             int nr = gbGetValue(gbGetValue(4, 14, g), gbGetValue(24, 29, g), r) - 4;
             int ng = gbGetValue(gbGetValue(4 + gbGetValue(0, 5, r), 14 + gbGetValue(0, 3, r), b),
-                     gbGetValue(24 + gbGetValue(0, 3, r), 29 + gbGetValue(0, 1, r), b), g) - 4;
+                         gbGetValue(24 + gbGetValue(0, 3, r), 29 + gbGetValue(0, 1, r), b), g)
+                - 4;
             int nb = gbGetValue(gbGetValue(4 + gbGetValue(0, 5, r), 14 + gbGetValue(0, 3, r), g),
-                     gbGetValue(24 + gbGetValue(0, 3, r), 29 + gbGetValue(0, 1, r), g), b) - 4;
+                         gbGetValue(24 + gbGetValue(0, 3, r), 29 + gbGetValue(0, 1, r), g), b)
+                - 4;
             gbColorFilter[(b << 10) | (g << 5) | r] = (nb << 10) | (ng << 5) | nr;
          }
       }
@@ -385,166 +387,183 @@ void gbCompareLYToLYC()
    }
 }
 
-void gbWriteMemory(uint16_t address, uint8_t value)
+static void gbWriteIO(uint16_t address, uint8_t value)
 {
-   if (address < 0x8000)
-   {
-#ifndef FINAL_VERSION
-      if (memorydebug && (address > 0x3fff || address < 0x2000))
-      {
-         log("Memory register write %04x=%02x PC=%04x\n",
-             address,
-             value,
-             PC.W);
-      }
-#endif
-      if (mapper)
-         (*mapper)(address, value);
-      return;
-   }
-
-   if (address < 0xa000)
-   {
-
-      if (gbVramWriteAccessValid())
-         gbMemoryMap[address >> 12][address & 0x0fff] = value;
-      return;
-   }
-
-   // Used for the mirroring of 0xC000 in 0xE000
-   if ((address >= 0xe000) && (address < 0xfe00))
-      address &= ~0x2000;
-
-   if (address < 0xc000)
-   {
-#ifndef FINAL_VERSION
-      if (memorydebug)
-      {
-         log("Memory register write %04x=%02x PC=%04x\n",
-             address,
-             value,
-             PC.W);
-      }
-#endif
-
-      // Is that a correct fix ??? (it used to be 'if (mapper)')...
-      if (mapperRAM)
-         (*mapperRAM)(address, value);
-      return;
-   }
-
-   if (address < 0xfe00)
-   {
-      gbMemoryMap[address >> 12][address & 0x0fff] = value;
-      return;
-   }
-
-   // OAM not accessible during mode 2 & 3.
-   if (address < 0xfea0)
-   {
-      if (((gbHardware & 0xa) && ((gbLcdMode | gbLcdModeDelayed) & 2)) || ((gbHardware & 5) && (((gbLcdModeDelayed == 2) && (gbLcdTicksDelayed <= GBLCD_MODE_2_CLOCK_TICKS)) || (gbLcdModeDelayed == 3))))
-         return;
-      else
-      {
-         gbMemory[address] = value;
-         return;
-      }
-   }
-
-   // GBC allows reading/writing to this area
-   if ((address > 0xfea0) && (address < 0xff00))
-   { 
-      gbMemory[address] = value;
-      return;
-   }
-
    switch (address & 0x00ff)
    {
-
-      case 0x00:
+   case 0x00:
+   {
+      gbMemory[0xff00] = ((gbMemory[0xff00] & 0xcf) | (value & 0x30) | 0xc0);
+      if (gbSgbMode)
       {
-         gbMemory[0xff00] = ((gbMemory[0xff00] & 0xcf) | (value & 0x30) | 0xc0);
-         if (gbSgbMode)
-         {
-            gbSgbDoBitTransfer(value);
-         }
-         return;
+         gbSgbDoBitTransfer(value);
       }
+      return;
+   }
 
-      case 0x01:
-      {
-         gbMemory[0xff01] = value;
-         return;
-      }
+   case 0x01:
+   {
+      gbMemory[0xff01] = value;
+      return;
+   }
 
-      // serial control
-      case 0x02:
-      {
-         gbSerialOn = (value & 0x80);
+   // serial control
+   case 0x02:
+   {
+      gbSerialOn = (value & 0x80);
 #ifndef NO_LINK
-         //trying to detect whether the game has exited multiplay mode, pokemon blue start w/ 0x7e while pocket racing start w/ 0x7c
-         if (EmuReseted || (gbMemory[0xff02] & 0x7c) || (value & 0x7c) || (!(value & 0x81)))
+      //trying to detect whether the game has exited multiplay mode, pokemon blue start w/ 0x7e while pocket racing start w/ 0x7c
+      if (EmuReseted || (gbMemory[0xff02] & 0x7c) || (value & 0x7c) || (!(value & 0x81)))
+      {
+         LinkFirstTime = true;
+      }
+      EmuReseted = false;
+      gbMemory[0xff02] = value;
+      if (gbSerialOn && (GetLinkMode() == LINK_GAMEBOY_IPC || GetLinkMode() == LINK_GAMEBOY_SOCKET || GetLinkMode() == LINK_DISCONNECTED || winGbPrinterEnabled))
+      {
+
+         gbSerialTicks = GBSERIAL_CLOCK_TICKS;
+
+         LinkIsWaiting = true;
+
+         //Do data exchange, master initiate the transfer
+         //may cause visual artifact if not processed immediately, is it due to IRQ stuff or invalid data being exchanged?
+         //internal clock
+         if ((value & 1))
          {
-            LinkFirstTime = true;
-         }
-         EmuReseted = false;
-         gbMemory[0xff02] = value;
-         if (gbSerialOn && (GetLinkMode() == LINK_GAMEBOY_IPC || GetLinkMode() == LINK_GAMEBOY_SOCKET || GetLinkMode() == LINK_DISCONNECTED || winGbPrinterEnabled))
-         {
-
-            gbSerialTicks = GBSERIAL_CLOCK_TICKS;
-
-            LinkIsWaiting = true;
-
-            //Do data exchange, master initiate the transfer
-            //may cause visual artifact if not processed immediately, is it due to IRQ stuff or invalid data being exchanged?
-            //internal clock
-            if ((value & 1))
-            { 
-               if (gbSerialFunction)
-               {
-                  gbSIO_SC = value;
-                  gbMemory[0xff01] = gbSerialFunction(gbMemory[0xff01]); //gbSerialFunction/gbStartLink/gbPrinter
-               }
-               else
-                  gbMemory[0xff01] = 0xff;
-               gbMemory[0xff02] &= 0x7f;
-               gbSerialOn = 0;
-               gbMemory[0xff0f] = register_IF |= 8;
-            }
-#ifdef OLD_GB_LINK
-            if (linkConnected)
+            if (gbSerialFunction)
             {
-               if (value & 1)
-               {
-                  linkSendByte(0x100 | gbMemory[0xFF01]);
-                  Sleep(5);
-               }
+               gbSIO_SC = value;
+               gbMemory[0xff01] = gbSerialFunction(gbMemory[0xff01]); //gbSerialFunction/gbStartLink/gbPrinter
             }
-#endif
+            else
+               gbMemory[0xff01] = 0xff;
+            gbMemory[0xff02] &= 0x7f;
+            gbSerialOn = 0;
+            gbMemory[0xff0f] = register_IF |= 8;
          }
-
-         gbSerialBits = 0;
-         return;
-#endif // NO_LINK
+#ifdef OLD_GB_LINK
+         if (linkConnected)
+         {
+            if (value & 1)
+            {
+               linkSendByte(0x100 | gbMemory[0xFF01]);
+               Sleep(5);
+            }
+         }
+#endif
       }
 
-      case 0x04:
+      gbSerialBits = 0;
+      return;
+#endif // NO_LINK
+   }
+
+   case 0x04:
+   {
+      // DIV register resets on any write
+      // (not totally perfect, but better than nothing)
+      gbMemory[0xff04] = register_DIV = 0;
+      gbDivTicks = GBDIV_CLOCK_TICKS;
+      // Another weird timer 'bug' :
+      // Writing to DIV register resets the internal timer,
+      // and can also increase TIMA/trigger an interrupt
+      // in some cases...
+      if (gbTimerOn && !(gbInternalTimer & (gbTimerClockTicks >> 1)))
       {
-         // DIV register resets on any write
-         // (not totally perfect, but better than nothing)
-         gbMemory[0xff04] = register_DIV = 0;
-         gbDivTicks = GBDIV_CLOCK_TICKS;
-         // Another weird timer 'bug' :
-         // Writing to DIV register resets the internal timer,
-         // and can also increase TIMA/trigger an interrupt
-         // in some cases...
-         if (gbTimerOn && !(gbInternalTimer & (gbTimerClockTicks >> 1)))
+         gbMemory[0xff05] = ++register_TIMA;
+         // timer overflow!
+         if (register_TIMA == 0)
+         {
+            // reload timer modulo
+            gbMemory[0xff05] = register_TIMA = register_TMA;
+
+            // flag interrupt
+            gbMemory[0xff0f] = register_IF |= 4;
+         }
+      }
+      gbInternalTimer = 0xff;
+      return;
+   }
+   case 0x05:
+      gbMemory[0xff05] = register_TIMA = value;
+      return;
+
+   case 0x06:
+      gbMemory[0xff06] = register_TMA = value;
+      return;
+
+   // TIMER control
+   case 0x07:
+   {
+
+      gbTimerModeChange = (((value & 3) != (register_TAC & 3)) && (value & register_TAC & 4)) ? true : false;
+      gbTimerOnChange = (((value ^ register_TAC) & 4) == 4) ? true : false;
+
+      gbTimerOn = (value & 4);
+
+      if (gbTimerOnChange || gbTimerModeChange)
+      {
+         gbTimerMode = value & 3;
+
+         switch (gbTimerMode)
+         {
+         case 0:
+            gbTimerClockTicks = GBTIMER_MODE_0_CLOCK_TICKS;
+            break;
+         case 1:
+            gbTimerClockTicks = GBTIMER_MODE_1_CLOCK_TICKS;
+            break;
+         case 2:
+            gbTimerClockTicks = GBTIMER_MODE_2_CLOCK_TICKS;
+            break;
+         case 3:
+            gbTimerClockTicks = GBTIMER_MODE_3_CLOCK_TICKS;
+            break;
+         }
+      }
+
+      // This looks weird, but this emulates a bug in which register_TIMA
+      // is increased when writing to register_TAC
+      // (This fixes Korodice's long-delay between menus bug).
+
+      if (gbTimerOnChange || gbTimerModeChange)
+      {
+         bool temp = false;
+
+         if ((gbTimerOn && !gbTimerModeChange) && (gbTimerMode & 2) && !(gbInternalTimer & 0x80) && (gbInternalTimer & (gbTimerClockTicks >> 1)) && !(gbInternalTimer & (gbTimerClockTicks >> 5)))
+            temp = true;
+         else if ((!gbTimerOn && !gbTimerModeChange && gbTimerOnChange) && ((gbTimerTicks - 1) < (gbTimerClockTicks >> 1)))
+            temp = true;
+         else if (gbTimerOn && gbTimerModeChange && !gbTimerOnChange)
+         {
+            switch (gbTimerMode & 3)
+            {
+            case 0x00:
+               temp = false;
+               break;
+            case 0x01:
+               if (((gbInternalTimer & 0x82) == 2) && (gbTimerTicks > (clockTicks + 1)))
+                  temp = true;
+               break;
+            case 0x02:
+               if (((gbInternalTimer & 0x88) == 0x8) && (gbTimerTicks > (clockTicks + 1)))
+                  temp = true;
+               break;
+            case 0x03:
+               if (((gbInternalTimer & 0xA0) == 0x20) && (gbTimerTicks > (clockTicks + 1)))
+                  temp = true;
+               break;
+            }
+         }
+
+         if (temp)
          {
             gbMemory[0xff05] = ++register_TIMA;
-            // timer overflow!
-            if (register_TIMA == 0)
+            if ((register_TIMA & 0xff) == 0)
             {
+               // timer overflow!
+
                // reload timer modulo
                gbMemory[0xff05] = register_TIMA = register_TMA;
 
@@ -552,577 +571,468 @@ void gbWriteMemory(uint16_t address, uint8_t value)
                gbMemory[0xff0f] = register_IF |= 4;
             }
          }
-         gbInternalTimer = 0xff;
-         return;
       }
-      case 0x05:
-         gbMemory[0xff05] = register_TIMA = value;
-         return;
+      gbMemory[0xff07] = register_TAC = value;
+      return;
+   }
 
-      case 0x06:
-         gbMemory[0xff06] = register_TMA = value;
-         return;
+   case 0x0f:
+   {
+      gbMemory[0xff0f] = register_IF = value;
+      return;
+   }
 
-      // TIMER control
-      case 0x07:
+   case 0x10:
+   case 0x11:
+   case 0x12:
+   case 0x13:
+   case 0x14:
+   case 0x15:
+   case 0x16:
+   case 0x17:
+   case 0x18:
+   case 0x19:
+   case 0x1a:
+   case 0x1b:
+   case 0x1c:
+   case 0x1d:
+   case 0x1e:
+   case 0x1f:
+   case 0x20:
+   case 0x21:
+   case 0x22:
+   case 0x23:
+   case 0x24:
+   case 0x25:
+   case 0x26:
+   case 0x27:
+   case 0x28:
+   case 0x29:
+   case 0x2a:
+   case 0x2b:
+   case 0x2c:
+   case 0x2d:
+   case 0x2e:
+   case 0x2f:
+   case 0x30:
+   case 0x31:
+   case 0x32:
+   case 0x33:
+   case 0x34:
+   case 0x35:
+   case 0x36:
+   case 0x37:
+   case 0x38:
+   case 0x39:
+   case 0x3a:
+   case 0x3b:
+   case 0x3c:
+   case 0x3d:
+   case 0x3e:
+   case 0x3f:
+      gbSoundEvent(soundTicks, address, value);
+      return;
+
+   case 0x40:
+   {
+      int lcdChange = (register_LCDC & 0x80) ^ (value & 0x80);
+
+      // don't draw the window if it was not enabled and not being drawn before
+      if (!(register_LCDC & 0x20) && (value & 0x20) && gbWindowLine == -1 && register_LY > register_WY)
+         gbWindowLine = 146;
+      // 007 fix : don't draw the first window's 1st line if it's enable 'too late'
+      // (ie. if register_LY == register_WY when enabling it)
+      // and move it to the next line
+      else if (!(register_LCDC & 0x20) && (value & 0x20) && (register_LY == register_WY))
+         gbWindowLine = -2;
+
+      gbMemory[0xff40] = register_LCDC = value;
+
+      if (lcdChange)
       {
-
-         gbTimerModeChange = (((value & 3) != (register_TAC & 3)) && (value & register_TAC & 4)) ? true : false;
-         gbTimerOnChange = (((value ^ register_TAC) & 4) == 4) ? true : false;
-
-         gbTimerOn = (value & 4);
-
-         if (gbTimerOnChange || gbTimerModeChange)
+         if ((value & 0x80) && (!register_LCDCBusy))
          {
-            gbTimerMode = value & 3;
+            //  if (!gbWhiteScreen && !gbSgbMask)
+            //    systemDrawScreen();
 
-            switch (gbTimerMode)
-            {
-               case 0:
-                  gbTimerClockTicks = GBTIMER_MODE_0_CLOCK_TICKS;
-                  break;
-               case 1:
-                  gbTimerClockTicks = GBTIMER_MODE_1_CLOCK_TICKS;
-                  break;
-               case 2:
-                  gbTimerClockTicks = GBTIMER_MODE_2_CLOCK_TICKS;
-                  break;
-               case 3:
-                  gbTimerClockTicks = GBTIMER_MODE_3_CLOCK_TICKS;
-                  break;
-            }
-         }
+            gbRegisterLYLCDCOffOn = (register_LY + 144) % 154;
 
-         // This looks weird, but this emulates a bug in which register_TIMA
-         // is increased when writing to register_TAC
-         // (This fixes Korodice's long-delay between menus bug).
-
-         if (gbTimerOnChange || gbTimerModeChange)
-         {
-            bool temp = false;
-
-            if ((gbTimerOn && !gbTimerModeChange) && (gbTimerMode & 2) && !(gbInternalTimer & 0x80) && (gbInternalTimer & (gbTimerClockTicks >> 1)) && !(gbInternalTimer & (gbTimerClockTicks >> 5)))
-               temp = true;
-            else if ((!gbTimerOn && !gbTimerModeChange && gbTimerOnChange) && ((gbTimerTicks - 1) < (gbTimerClockTicks >> 1)))
-               temp = true;
-            else if (gbTimerOn && gbTimerModeChange && !gbTimerOnChange)
-            {
-               switch (gbTimerMode & 3)
-               {
-                  case 0x00:
-                     temp = false;
-                     break;
-                  case 0x01:
-                     if (((gbInternalTimer & 0x82) == 2) && (gbTimerTicks > (clockTicks + 1)))
-                        temp = true;
-                     break;
-                  case 0x02:
-                     if (((gbInternalTimer & 0x88) == 0x8) && (gbTimerTicks > (clockTicks + 1)))
-                        temp = true;
-                     break;
-                  case 0x03:
-                     if (((gbInternalTimer & 0xA0) == 0x20) && (gbTimerTicks > (clockTicks + 1)))
-                        temp = true;
-                     break;
-               }
-            }
-
-            if (temp)
-            {
-               gbMemory[0xff05] = ++register_TIMA;
-               if ((register_TIMA & 0xff) == 0)
-               {
-                  // timer overflow!
-
-                  // reload timer modulo
-                  gbMemory[0xff05] = register_TIMA = register_TMA;
-
-                  // flag interrupt
-                  gbMemory[0xff0f] = register_IF |= 4;
-               }
-            }
-         }
-         gbMemory[0xff07] = register_TAC = value;
-         return;
-      }
-
-      case 0x0f:
-      {
-         gbMemory[0xff0f] = register_IF = value;
-         //gbMemory[0xff0f] = register_IE |= value;
-         return;
-      }
-
-      case 0x10:
-      case 0x11:
-      case 0x12:
-      case 0x13:
-      case 0x14:
-      case 0x15:
-      case 0x16:
-      case 0x17:
-      case 0x18:
-      case 0x19:
-      case 0x1a:
-      case 0x1b:
-      case 0x1c:
-      case 0x1d:
-      case 0x1e:
-      case 0x1f:
-      case 0x20:
-      case 0x21:
-      case 0x22:
-      case 0x23:
-      case 0x24:
-      case 0x25:
-      case 0x26:
-      case 0x27:
-      case 0x28:
-      case 0x29:
-      case 0x2a:
-      case 0x2b:
-      case 0x2c:
-      case 0x2d:
-      case 0x2e:
-      case 0x2f:
-      case 0x30:
-      case 0x31:
-      case 0x32:
-      case 0x33:
-      case 0x34:
-      case 0x35:
-      case 0x36:
-      case 0x37:
-      case 0x38:
-      case 0x39:
-      case 0x3a:
-      case 0x3b:
-      case 0x3c:
-      case 0x3d:
-      case 0x3e:
-      case 0x3f:
-         gbSoundEvent(soundTicks, address, value);
-         return;
-
-      case 0x40:
-      {
-         int lcdChange = (register_LCDC & 0x80) ^ (value & 0x80);
-
-         // don't draw the window if it was not enabled and not being drawn before
-         if (!(register_LCDC & 0x20) && (value & 0x20) && gbWindowLine == -1 && register_LY > register_WY)
+            gbLcdTicks = GBLCD_MODE_2_CLOCK_TICKS - (gbSpeed ? 2 : 1);
+            gbLcdTicksDelayed = GBLCD_MODE_2_CLOCK_TICKS - (gbSpeed ? 1 : 0);
+            gbLcdLYIncrementTicks = GBLY_INCREMENT_CLOCK_TICKS - (gbSpeed ? 2 : 1);
+            gbLcdLYIncrementTicksDelayed = GBLY_INCREMENT_CLOCK_TICKS - (gbSpeed ? 1 : 0);
+            gbLcdMode = 2;
+            gbLcdModeDelayed = 2;
+            gbMemory[0xff41] = register_STAT = (register_STAT & 0xfc) | 2;
+            gbMemory[0xff44] = register_LY = 0x00;
+            gbInt48Signal = 0;
+            gbLYChangeHappened = false;
+            gbLCDChangeHappened = false;
             gbWindowLine = 146;
-         // 007 fix : don't draw the first window's 1st line if it's enable 'too late'
-         // (ie. if register_LY == register_WY when enabling it)
-         // and move it to the next line
-         else if (!(register_LCDC & 0x20) && (value & 0x20) && (register_LY == register_WY))
-            gbWindowLine = -2;
+            oldRegister_WY = 146;
 
-         gbMemory[0xff40] = register_LCDC = value;
-
-         if (lcdChange)
-         {
-            if ((value & 0x80) && (!register_LCDCBusy))
+            // Fix for Namco Gallery Vol.2
+            // (along with updating register_LCDC at the start of 'case 0x40') :
+            if (register_STAT & 0x20)
             {
-               //  if (!gbWhiteScreen && !gbSgbMask)
-               //    systemDrawScreen();
-
-               gbRegisterLYLCDCOffOn = (register_LY + 144) % 154;
-
-               gbLcdTicks = GBLCD_MODE_2_CLOCK_TICKS - (gbSpeed ? 2 : 1);
-               gbLcdTicksDelayed = GBLCD_MODE_2_CLOCK_TICKS - (gbSpeed ? 1 : 0);
-               gbLcdLYIncrementTicks = GBLY_INCREMENT_CLOCK_TICKS - (gbSpeed ? 2 : 1);
-               gbLcdLYIncrementTicksDelayed = GBLY_INCREMENT_CLOCK_TICKS - (gbSpeed ? 1 : 0);
-               gbLcdMode = 2;
-               gbLcdModeDelayed = 2;
-               gbMemory[0xff41] = register_STAT = (register_STAT & 0xfc) | 2;
-               gbMemory[0xff44] = register_LY = 0x00;
-               gbInt48Signal = 0;
-               gbLYChangeHappened = false;
-               gbLCDChangeHappened = false;
-               gbWindowLine = 146;
-               oldRegister_WY = 146;
-
-               // Fix for Namco Gallery Vol.2
-               // (along with updating register_LCDC at the start of 'case 0x40') :
-               if (register_STAT & 0x20)
-               {
-                  // send LCD interrupt only if no interrupt 48h signal...
-                  if (!gbInt48Signal)
-                  {
-                     gbMemory[0xff0f] = register_IF |= 2;
-                  }
-                  gbInt48Signal |= 4;
-               }
-               gbCompareLYToLYC();
-            }
-            else
-            {
-               register_LCDCBusy = clockTicks + 6;
-
-               //used to update the screen with white lines when it's off.
-               //(it looks strange, but it's pretty accurate)
-
-               gbWhiteScreen = 0;
-
-               gbScreenTicks = ((150 - register_LY) * GBLY_INCREMENT_CLOCK_TICKS + (49 << (gbSpeed ? 1 : 0)));
-
-               // disable the screen rendering
-               gbScreenOn = false;
-               gbLcdTicks = 0;
-               gbLcdMode = 0;
-               gbLcdModeDelayed = 0;
-               gbMemory[0xff41] = register_STAT &= 0xfc;
-               gbInt48Signal = 0;
-            }
-         }
-         return;
-      }
-
-      // STAT
-      case 0x41:
-      {
-         //register_STAT = (register_STAT & 0x87) |
-         //      (value & 0x7c);
-         gbMemory[0xff41] = register_STAT = (value & 0xf8) | (register_STAT & 0x07); // fix ?
-         // TODO:
-         // GB bug from Devrs FAQ
-         // http://www.devrs.com/gb/files/faqs.html#GBBugs
-         // 2018-7-26 Backported STAT register bug behavior
-         // Corrected : it happens if Lcd Mode < 2, but also if LY == LYC whatever
-         // Lcd Mode is, and if !gbInt48Signal in all cases. The screen being off
-         // doesn't matter (the bug will still happen).
-         // That fixes 'Satoru Nakajima - F-1 Hero' crash bug.
-         // Games below relies on this bug, , and are incompatible with the GBC.
-         // - Road Rash: crash after player screen
-         // - Zerg no Densetsu: crash right after showing a small portion of intro
-         // - 2019-07-18 - Speedy Gonzalez status bar relies on this as well.
-
-         if ((gbHardware & 7)
-             && (((!gbInt48Signal) && (gbLcdMode < 2) && (register_LCDC & 0x80))
-                 || (register_LY == register_LYC)))
-         {
-            // send LCD interrupt only if no interrupt 48h signal...
-            if (!gbInt48Signal)
-               gbMemory[0xff0f] = register_IF |= 2;
-         }
-
-         gbInt48Signal &= ((register_STAT >> 3) & 0xF);
-
-         if ((register_LCDC & 0x80))
-         {
-            if ((register_STAT & 0x08) && (gbLcdMode == 0))
-            {
+               // send LCD interrupt only if no interrupt 48h signal...
                if (!gbInt48Signal)
                {
                   gbMemory[0xff0f] = register_IF |= 2;
                }
-               gbInt48Signal |= 1;
-            }
-            if ((register_STAT & 0x10) && (gbLcdMode == 1))
-            {
-               if (!gbInt48Signal)
-               {
-                  gbMemory[0xff0f] = register_IF |= 2;
-               }
-               gbInt48Signal |= 2;
-            }
-            if ((register_STAT & 0x20) && (gbLcdMode == 2))
-            {
-               if (!gbInt48Signal)
-               {
-                  gbMemory[0xff0f] = register_IF |= 2;
-               }
-               //gbInt48Signal |= 4;
+               gbInt48Signal |= 4;
             }
             gbCompareLYToLYC();
-
-            gbMemory[0xff0f] = register_IF;
-            gbMemory[0xff41] = register_STAT;
          }
-         return;
-      }
-
-      // SCY
-      case 0x42:
-      {
-         int temp = -1;
-
-         if ((gbLcdMode == 3) || (gbLcdModeDelayed == 3))
-            temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicks);
-
-         if (temp >= 0)
-         {
-            for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
-               if (temp < 300)
-                  gbSCYLine[i] = value;
-         }
-
          else
-            memset(gbSCYLine, value, sizeof(gbSCYLine));
-
-         gbMemory[0xff42] = register_SCY = value;
-         return;
-      }
-
-      // SCX
-      case 0x43:
-      {
-         int temp = -1;
-
-         if (gbLcdModeDelayed == 3)
-            temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
-
-         if (temp >= 0)
          {
-            for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
-               if (temp < 300)
-                  gbSCXLine[i] = value;
+            register_LCDCBusy = clockTicks + 6;
+
+            //used to update the screen with white lines when it's off.
+            //(it looks strange, but it's pretty accurate)
+
+            gbWhiteScreen = 0;
+
+            gbScreenTicks = ((150 - register_LY) * GBLY_INCREMENT_CLOCK_TICKS + (49 << (gbSpeed ? 1 : 0)));
+
+            // disable the screen rendering
+            gbScreenOn = false;
+            gbLcdTicks = 0;
+            gbLcdMode = 0;
+            gbLcdModeDelayed = 0;
+            gbMemory[0xff41] = register_STAT &= 0xfc;
+            gbInt48Signal = 0;
          }
+      }
+      return;
+   }
 
-         else
-            memset(gbSCXLine, value, sizeof(gbSCXLine));
+   // STAT
+   case 0x41:
+   {
+      //register_STAT = (register_STAT & 0x87) |
+      //      (value & 0x7c);
+      gbMemory[0xff41] = register_STAT = (value & 0xf8) | (register_STAT & 0x07); // fix ?
+      // TODO:
+      // GB bug from Devrs FAQ
+      // http://www.devrs.com/gb/files/faqs.html#GBBugs
+      // 2018-7-26 Backported STAT register bug behavior
+      // Corrected : it happens if Lcd Mode < 2, but also if LY == LYC whatever
+      // Lcd Mode is, and if !gbInt48Signal in all cases. The screen being off
+      // doesn't matter (the bug will still happen).
+      // That fixes 'Satoru Nakajima - F-1 Hero' crash bug.
+      // Games below relies on this bug, , and are incompatible with the GBC.
+      // - Road Rash: crash after player screen
+      // - Zerg no Densetsu: crash right after showing a small portion of intro
+      // - 2019-07-18 - Speedy Gonzalez status bar relies on this as well.
 
-         gbMemory[0xff43] = register_SCX = value;
-         return;
+      if ((gbHardware & 7)
+          && (((!gbInt48Signal) && (gbLcdMode < 2) && (register_LCDC & 0x80))
+              || (register_LY == register_LYC)))
+      {
+         // send LCD interrupt only if no interrupt 48h signal...
+         if (!gbInt48Signal)
+            gbMemory[0xff0f] = register_IF |= 2;
       }
 
-      // LY
-      case 0x44:
-      {
-         // read only
-         return;
-      }
+      gbInt48Signal &= ((register_STAT >> 3) & 0xF);
 
-      // LYC
-      case 0x45:
+      if ((register_LCDC & 0x80))
       {
-         if (register_LYC != value)
+         if ((register_STAT & 0x08) && (gbLcdMode == 0))
          {
-            gbMemory[0xff45] = register_LYC = value;
-            if (register_LCDC & 0x80)
+            if (!gbInt48Signal)
             {
-               gbCompareLYToLYC();
+               gbMemory[0xff0f] = register_IF |= 2;
             }
+            gbInt48Signal |= 1;
          }
-         return;
+         if ((register_STAT & 0x10) && (gbLcdMode == 1))
+         {
+            if (!gbInt48Signal)
+            {
+               gbMemory[0xff0f] = register_IF |= 2;
+            }
+            gbInt48Signal |= 2;
+         }
+         if ((register_STAT & 0x20) && (gbLcdMode == 2))
+         {
+            if (!gbInt48Signal)
+            {
+               gbMemory[0xff0f] = register_IF |= 2;
+            }
+            //gbInt48Signal |= 4;
+         }
+         gbCompareLYToLYC();
+
+         gbMemory[0xff0f] = register_IF;
+         gbMemory[0xff41] = register_STAT;
+      }
+      return;
+   }
+
+   // SCY
+   case 0x42:
+   {
+      int temp = -1;
+
+      if ((gbLcdMode == 3) || (gbLcdModeDelayed == 3))
+         temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicks);
+
+      if (temp >= 0)
+      {
+         for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
+            if (temp < 300)
+               gbSCYLine[i] = value;
       }
 
-      // DMA!
-      case 0x46:
-      {
-         int source = value * 0x0100;
+      else
+         memset(gbSCYLine, value, sizeof(gbSCYLine));
 
-         gbCopyMemory(0xfe00,
-             source,
-             0xa0);
-         gbMemory[0xff46] = register_DMA = value;
-         return;
+      gbMemory[0xff42] = register_SCY = value;
+      return;
+   }
+
+   // SCX
+   case 0x43:
+   {
+      int temp = -1;
+
+      if (gbLcdModeDelayed == 3)
+         temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
+
+      if (temp >= 0)
+      {
+         for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
+            if (temp < 300)
+               gbSCXLine[i] = value;
       }
 
-      // BGP
-      case 0x47:
+      else
+         memset(gbSCXLine, value, sizeof(gbSCXLine));
+
+      gbMemory[0xff43] = register_SCX = value;
+      return;
+   }
+
+   // LY
+   case 0x44:
+   {
+      // read only
+      return;
+   }
+
+   // LYC
+   case 0x45:
+   {
+      if (register_LYC != value)
       {
-
-         int temp = -1;
-
-         gbMemory[0xff47] = value;
-
-         if (gbLcdModeDelayed == 3)
-            temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
-
-         if (temp >= 0)
+         gbMemory[0xff45] = register_LYC = value;
+         if (register_LCDC & 0x80)
          {
-            for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
-               if (temp < 300)
-                  gbBgpLine[i] = value;
+            gbCompareLYToLYC();
          }
-         else
-            memset(gbBgpLine, value, sizeof(gbBgpLine));
-
-         gbBgp[0] = value & 0x03;
-         gbBgp[1] = (value & 0x0c) >> 2;
-         gbBgp[2] = (value & 0x30) >> 4;
-         gbBgp[3] = (value & 0xc0) >> 6;
-         break;
       }
+      return;
+   }
 
-      // OBP0
-      case 0x48:
+   // DMA!
+   case 0x46:
+   {
+      int source = value * 0x0100;
+
+      gbCopyMemory(0xfe00,
+          source,
+          0xa0);
+      gbMemory[0xff46] = register_DMA = value;
+      return;
+   }
+
+   // BGP
+   case 0x47:
+   {
+
+      int temp = -1;
+
+      gbMemory[0xff47] = value;
+
+      if (gbLcdModeDelayed == 3)
+         temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
+
+      if (temp >= 0)
       {
-         int temp = -1;
-
-         gbMemory[0xff48] = value;
-
-         if (gbLcdModeDelayed == 3)
-            temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
-
-         if (temp >= 0)
-         {
-            for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
-               if (temp < 300)
-                  gbObp0Line[i] = value;
-         }
-         else
-            memset(gbObp0Line, value, sizeof(gbObp0Line));
-
-         gbObp0[0] = value & 0x03;
-         gbObp0[1] = (value & 0x0c) >> 2;
-         gbObp0[2] = (value & 0x30) >> 4;
-         gbObp0[3] = (value & 0xc0) >> 6;
-         break;
+         for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
+            if (temp < 300)
+               gbBgpLine[i] = value;
       }
+      else
+         memset(gbBgpLine, value, sizeof(gbBgpLine));
 
-      // OBP1
-      case 0x49:
+      gbBgp[0] = value & 0x03;
+      gbBgp[1] = (value & 0x0c) >> 2;
+      gbBgp[2] = (value & 0x30) >> 4;
+      gbBgp[3] = (value & 0xc0) >> 6;
+      break;
+   }
+
+   // OBP0
+   case 0x48:
+   {
+      int temp = -1;
+
+      gbMemory[0xff48] = value;
+
+      if (gbLcdModeDelayed == 3)
+         temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
+
+      if (temp >= 0)
       {
-         int temp = -1;
-
-         gbMemory[0xff49] = value;
-
-         if (gbLcdModeDelayed == 3)
-            temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
-
-         if (temp >= 0)
-         {
-            for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
-               if (temp < 300)
-                  gbObp1Line[i] = value;
-         }
-         else
-            memset(gbObp1Line, value, sizeof(gbObp1Line));
-
-         gbObp1[0] = value & 0x03;
-         gbObp1[1] = (value & 0x0c) >> 2;
-         gbObp1[2] = (value & 0x30) >> 4;
-         gbObp1[3] = (value & 0xc0) >> 6;
-         break;
+         for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
+            if (temp < 300)
+               gbObp0Line[i] = value;
       }
+      else
+         memset(gbObp0Line, value, sizeof(gbObp0Line));
 
-      // WY
-      case 0x4a:
-         gbMemory[0xff4a] = register_WY = value;
-         if ((register_LY <= register_WY) && ((gbWindowLine < 0) || (gbWindowLine >= 144)))
-         {
-            gbWindowLine = -1;
-            oldRegister_WY = register_WY;
-         }
-         return;
+      gbObp0[0] = value & 0x03;
+      gbObp0[1] = (value & 0x0c) >> 2;
+      gbObp0[2] = (value & 0x30) >> 4;
+      gbObp0[3] = (value & 0xc0) >> 6;
+      break;
+   }
 
-      // WX
-      case 0x4b:
-         gbMemory[0xff4b] = register_WX = value;
-         return;
+   // OBP1
+   case 0x49:
+   {
+      int temp = -1;
 
-      // KEY1
-      case 0x4d:
+      gbMemory[0xff49] = value;
+
+      if (gbLcdModeDelayed == 3)
+         temp = ((GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS) - gbLcdLYIncrementTicksDelayed);
+
+      if (temp >= 0)
       {
-         if (gbCgbMode)
+         for (int i = temp << (gbSpeed ? 1 : 2); i < 300; i++)
+            if (temp < 300)
+               gbObp1Line[i] = value;
+      }
+      else
+         memset(gbObp1Line, value, sizeof(gbObp1Line));
+
+      gbObp1[0] = value & 0x03;
+      gbObp1[1] = (value & 0x0c) >> 2;
+      gbObp1[2] = (value & 0x30) >> 4;
+      gbObp1[3] = (value & 0xc0) >> 6;
+      break;
+   }
+
+   // WY
+   case 0x4a:
+      gbMemory[0xff4a] = register_WY = value;
+      if ((register_LY <= register_WY) && ((gbWindowLine < 0) || (gbWindowLine >= 144)))
+      {
+         gbWindowLine = -1;
+         oldRegister_WY = register_WY;
+      }
+      return;
+
+   // WX
+   case 0x4b:
+      gbMemory[0xff4b] = register_WX = value;
+      return;
+
+   // BOOTROM disable register (also gbCgbMode enabler if value & 0x10 ?)
+   case 0x50:
+   {
+      if (inBios && (value & 1))
+      {
+         gbMemoryMap[0x00] = &gbRom[0x0000];
+         if (gbHardware & 5)
          {
+            memcpy((uint8_t*)(gbRom + 0x100), (uint8_t*)(gbMemory + 0x100), 0xF00);
+         }
+         inBios = false;
+      }
+   }
+   break;
+
+   case 0x6c:
+   {
+      gbMemory[0xff6c] = 0xfe | value;
+      return;
+   }
+
+   case 0x75:
+   {
+      gbMemory[0xff75] = 0x8f | value;
+      return;
+   }
+
+   case 0xff:
+   {
+      gbMemory[0xffff] = register_IE = value;
+      return;
+   }
+
+   default:
+   {
+      if (gbCgbMode)
+      {
+         switch (address & 0x00ff)
+         {
+         // KEY1
+         case 0x4d:
             gbMemory[0xff4d] = (gbMemory[0xff4d] & 0x80) | (value & 1) | 0x7e;
             return;
-         }
-      }
-      break;
 
-      // VBK
-      case 0x4f:
-      {
-         if (gbCgbMode)
+         // VBK
+         case 0x4f:
          {
-            value = value & 1;
+            value &= 1;
             if (value == gbVramBank)
                return;
-
             int vramAddress = value * 0x2000;
             gbMemoryMap[0x08] = &gbVram[vramAddress];
             gbMemoryMap[0x09] = &gbVram[vramAddress + 0x1000];
-
             gbVramBank = value;
             register_VBK = value;
+            return;
          }
-         return;
-      }
-      break;
 
-      // BOOTROM disable register (also gbCgbMode enabler if value & 0x10 ?)
-      case 0x50:
-      {
-         if (inBios && (value & 1))
-         {
-            gbMemoryMap[0x00] = &gbRom[0x0000];
-            if (gbHardware & 5)
-            {
-               memcpy((uint8_t*)(gbRom + 0x100), (uint8_t*)(gbMemory + 0x100), 0xF00);
-            }
-            inBios = false;
-         }
-      }
-
-      // HDMA1
-      case 0x51:
-      {
-         if (gbCgbMode)
-         {
+         // HDMA1
+         case 0x51:
             if (value > 0x7f && value < 0xa0)
                value = 0;
-
             gbHdmaSource = (value << 8) | (gbHdmaSource & 0xf0);
-
             register_HDMA1 = value;
             return;
-         }
-      }
-      break;
 
-      // HDMA2
-      case 0x52:
-      {
-         if (gbCgbMode)
-         {
-            value = value & 0xf0;
-
+         // HDMA2
+         case 0x52:
+            value &= 0xf0;
             gbHdmaSource = (gbHdmaSource & 0xff00) | (value);
-
             register_HDMA2 = value;
             return;
-         }
-      }
-      break;
 
-      // HDMA3
-      case 0x53:
-      {
-         if (gbCgbMode)
-         {
-            value = value & 0x1f;
+         // HDMA3
+         case 0x53:
+            value &= 0x1f;
             gbHdmaDestination = (value << 8) | (gbHdmaDestination & 0xf0);
             gbHdmaDestination |= 0x8000;
             register_HDMA3 = value;
             return;
-         }
-      }
-      break;
 
-      // HDMA4
-      case 0x54:
-      {
-         if (gbCgbMode)
-         {
-            value = value & 0xf0;
+         // HDMA4
+         case 0x54:
+            value &= 0xf0;
             gbHdmaDestination = (gbHdmaDestination & 0x1f00) | value;
             gbHdmaDestination |= 0x8000;
             register_HDMA4 = value;
             return;
-         }
-      }
-      break;
 
-      // HDMA5
-      case 0x55:
-      {
-
-         if (gbCgbMode)
-         {
+         // HDMA5
+         case 0x55:
             gbHdmaBytes = 16 + (value & 0x7f) * 16;
             if (gbHdmaOn)
             {
@@ -1170,404 +1080,284 @@ void gbWriteMemory(uint16_t address, uint8_t value)
                }
             }
             return;
-         }
-      }
-      break;
 
-      // BCPS
-      case 0x68:
-      {
-         if (gbCgbMode)
+         // BCPS
+         case 0x68:
          {
             int paletteIndex = (value & 0x3f) >> 1;
             int paletteHiLo = (value & 0x01);
-
             gbMemory[0xff68] = value;
-
             gbMemory[0xff69] = (paletteHiLo ? (gbPalette[paletteIndex] >> 8) : (gbPalette[paletteIndex] & 0x00ff));
             return;
          }
-      }
-      break;
 
-      // BCPD
-      case 0x69:
-      {
-         if (gbCgbMode)
+         // BCPD
+         case 0x69:
          {
             int v = gbMemory[0xff68];
             int paletteIndex = (v & 0x3f) >> 1;
             int paletteHiLo = (v & 0x01);
-
             if (gbCgbPaletteAccessValid())
             {
                gbMemory[0xff69] = value;
                gbPalette[paletteIndex] = (paletteHiLo ? ((value << 8) | (gbPalette[paletteIndex] & 0xff)) : ((gbPalette[paletteIndex] & 0xff00) | (value))) & 0x7fff;
             }
-
             if (gbMemory[0xff68] & 0x80)
             {
                int index = ((gbMemory[0xff68] & 0x3f) + 1) & 0x3f;
-
                gbMemory[0xff68] = (gbMemory[0xff68] & 0x80) | index;
                gbMemory[0xff69] = (index & 1 ? (gbPalette[index >> 1] >> 8) : (gbPalette[index >> 1] & 0x00ff));
             }
             return;
          }
-      }
-      break;
 
-      // OCPS
-      case 0x6a:
-      {
-         if (gbCgbMode)
+         // OCPS
+         case 0x6a:
          {
             int paletteIndex = (value & 0x3f) >> 1;
             int paletteHiLo = (value & 0x01);
-
             paletteIndex += 32;
-
             gbMemory[0xff6a] = value;
-
             gbMemory[0xff6b] = (paletteHiLo ? (gbPalette[paletteIndex] >> 8) : (gbPalette[paletteIndex] & 0x00ff));
             return;
          }
-      }
-      break;
 
-      // OCPD
-      case 0x6b:
-      {
-
-         if (gbCgbMode)
+         // OCPD
+         case 0x6b:
          {
             int v = gbMemory[0xff6a];
             int paletteIndex = (v & 0x3f) >> 1;
             int paletteHiLo = (v & 0x01);
-
             paletteIndex += 32;
-
             if (gbCgbPaletteAccessValid())
             {
                gbMemory[0xff6b] = value;
                gbPalette[paletteIndex] = (paletteHiLo ? ((value << 8) | (gbPalette[paletteIndex] & 0xff)) : ((gbPalette[paletteIndex] & 0xff00) | (value))) & 0x7fff;
             }
-
             if (gbMemory[0xff6a] & 0x80)
             {
                int index = ((gbMemory[0xff6a] & 0x3f) + 1) & 0x3f;
-
                gbMemory[0xff6a] = (gbMemory[0xff6a] & 0x80) | index;
-
                gbMemory[0xff6b] = (index & 1 ? (gbPalette[(index >> 1) + 32] >> 8) : (gbPalette[(index >> 1) + 32] & 0x00ff));
             }
             return;
          }
-      }
-      break;
 
-      case 0x6c:
-      {
-         gbMemory[0xff6c] = 0xfe | value;
-         return;
-      }
-
-      // SVBK
-      case 0x70:
-      {
-         if (gbCgbMode)
+         // SVBK
+         case 0x70:
          {
-            value = value & 7;
-
+            value &= 7;
             int bank = value;
             if (value == 0)
                bank = 1;
-
             if (bank == gbWramBank)
                return;
-
             int wramAddress = bank * 0x1000;
             gbMemoryMap[0x0d] = &gbWram[wramAddress];
-
             gbWramBank = bank;
             gbMemory[0xff70] = register_SVBK = value;
             return;
          }
-      }
 
-      case 0x75:
-      {
-         gbMemory[0xff75] = 0x8f | value;
-         return;
+         default:
+            break;
+         }
       }
-
-      case 0xff:
-      {
-         gbMemory[0xffff] = register_IE = value;
-         return;
-      }
+      break;
    }
-
-   if (address < 0xff80)
-   {
-      gbMemory[address] = value;
-      return;
    }
 
    gbMemory[address] = value;
 }
 
-uint8_t gbReadMemory(uint16_t address)
+static uint8_t gbReadIO(uint16_t address)
 {
-   if (gbCheatMap[address])
-      return gbCheatRead(address);
-
-   if (address < 0x8000)
-      return gbMemoryMap[address >> 12][address & 0x0fff];
-
-   if (address < 0xa000)
+   switch (address & 0x00ff)
    {
-      if (gbVramReadAccessValid())
-         return gbMemoryMap[address >> 12][address & 0x0fff];
-      return 0xff;
-   }
-
-   // Used for the mirroring of 0xC000 in 0xE000
-   if ((address >= 0xe000) && (address < 0xfe00))
-      address &= ~0x2000;
-
-   if (address < 0xc000)
+   case 0x00:
    {
-#ifndef FINAL_VERSION
-      if (memorydebug)
+      int P1 = gbMemory[0xff00];
+      if (gbSgbMode)
       {
-         log("Memory register read %04x PC=%04x\n",
-             address,
-             PC.W);
+         gbSgbReadingController |= 4;
+         gbSgbResetPacketState();
       }
-#endif
-
-      // for the 2kb ram limit (fixes crash in shawu's story
-      // but now its sram test fails, as the it expects 8kb and not 2kb...
-      // So use the 'genericflashcard' option to fix it).
-      if (address <= (0xa000 + gbRamSizeMask))
+      if ((P1 & 0x30) == 0x20)
       {
-         if (mapperReadRAM)
-            return mapperReadRAM(address);
-         return gbMemoryMap[address >> 12][address & 0x0fff];
-      }
-      return 0xff;
-   }
-
-   if (address >= 0xff00)
-   {
-      switch (address & 0x00ff)
-      {
-         case 0x00:
+         int joy = 0;         
+         P1 &= 0xf0;
+         if (gbSgbMode && gbSgbMultiplayer)
          {
-            if (gbSgbMode)
+            switch (gbSgbNextController)
             {
-               gbSgbReadingController |= 4;
-               gbSgbResetPacketState();
-            }
-
-            int b = gbMemory[0xff00];
-
-            if ((b & 0x30) == 0x20)
-            {
-               b &= 0xf0;
-
-               int joy = 0;
-               if (gbSgbMode && gbSgbMultiplayer)
-               {
-                  switch (gbSgbNextController)
-                  {
-                     case 0x0f:
-                        joy = 0;
-                        break;
-                     case 0x0e:
-                        joy = 1;
-                        break;
-                     case 0x0d:
-                        joy = 2;
-                        break;
-                     case 0x0c:
-                        joy = 3;
-                        break;
-                     default:
-                        joy = 0;
-                  }
-               }
-               int joystate = gbJoymask[joy];
-               if (!(joystate & 128))
-                  b |= 0x08;
-               if (!(joystate & 64))
-                  b |= 0x04;
-               if (!(joystate & 32))
-                  b |= 0x02;
-               if (!(joystate & 16))
-                  b |= 0x01;
-
-               gbMemory[0xff00] = b;
-            }
-            else if ((b & 0x30) == 0x10)
-            {
-               b &= 0xf0;
-
-               int joy = 0;
-               if (gbSgbMode && gbSgbMultiplayer)
-               {
-                  switch (gbSgbNextController)
-                  {
-                     case 0x0f:
-                        joy = 0;
-                        break;
-                     case 0x0e:
-                        joy = 1;
-                        break;
-                     case 0x0d:
-                        joy = 2;
-                        break;
-                     case 0x0c:
-                        joy = 3;
-                        break;
-                     default:
-                        joy = 0;
-                  }
-               }
-               int joystate = gbJoymask[joy];
-               if (!(joystate & 8))
-                  b |= 0x08;
-               if (!(joystate & 4))
-                  b |= 0x04;
-               if (!(joystate & 2))
-                  b |= 0x02;
-               if (!(joystate & 1))
-                  b |= 0x01;
-
-               gbMemory[0xff00] = b;
-            }
-            else
-            {
-               if (gbSgbMode && gbSgbMultiplayer)
-               {
-                  gbMemory[0xff00] = 0xf0 | gbSgbNextController;
-               }
-               else
-               {
-                  gbMemory[0xff00] = 0xff;
-               }
+            case 0x0f: joy = 0; break;
+            case 0x0e: joy = 1; break;
+            case 0x0d: joy = 2; break;
+            case 0x0c: joy = 3; break;
+            default: joy = 0; break;
             }
          }
-            return gbMemory[0xff00];
-            break;
-         case 0x01:
-            return gbMemory[0xff01];
-         case 0x02:
-            return (gbMemory[0xff02]);
-         case 0x03:
-            log("Undocumented Memory register read %04x PC=%04x\n",
-                address,
-                PC.W);
-            return 0xff;
-         case 0x04:
-            return register_DIV;
-         case 0x05:
-            return register_TIMA;
-         case 0x06:
-            return register_TMA;
-         case 0x07:
-            return (0xf8 | register_TAC);
-         case 0x08:
-         case 0x09:
-         case 0x0a:
-         case 0x0b:
-         case 0x0c:
-         case 0x0d:
-         case 0x0e:
-            log("Undocumented Memory register read %04x PC=%04x\n",
-                address,
-                PC.W);
-            return 0xff;
-         case 0x0f:
-            return (0xe0 | gbMemory[0xff0f]);
-         case 0x10:
-         case 0x11:
-         case 0x12:
-         case 0x13:
-         case 0x14:
-         case 0x15:
-         case 0x16:
-         case 0x17:
-         case 0x18:
-         case 0x19:
-         case 0x1a:
-         case 0x1b:
-         case 0x1c:
-         case 0x1d:
-         case 0x1e:
-         case 0x1f:
-         case 0x20:
-         case 0x21:
-         case 0x22:
-         case 0x23:
-         case 0x24:
-         case 0x25:
-         case 0x26:
-         case 0x27:
-         case 0x28:
-         case 0x29:
-         case 0x2a:
-         case 0x2b:
-         case 0x2c:
-         case 0x2d:
-         case 0x2e:
-         case 0x2f:
-         case 0x30:
-         case 0x31:
-         case 0x32:
-         case 0x33:
-         case 0x34:
-         case 0x35:
-         case 0x36:
-         case 0x37:
-         case 0x38:
-         case 0x39:
-         case 0x3a:
-         case 0x3b:
-         case 0x3c:
-         case 0x3d:
-         case 0x3e:
-         case 0x3f:
-            // Sound registers read
-            return gbSoundRead(soundTicks, address);
-         case 0x40:
-            return register_LCDC;
-         case 0x41:
-            // This is a GB/C only bug (ie. not GBA/SP).
-            if ((gbHardware & 7) && (gbLcdMode == 2) && (gbLcdModeDelayed == 1) && (!gbSpeed))
-               return (0x80 | (gbMemory[0xff41] & 0xFC));
-            else
-               return (0x80 | gbMemory[0xff41]);
-         case 0x42:
-            return register_SCY;
-         case 0x43:
-            return register_SCX;
-         case 0x44:
-            if (((gbHardware & 7) && ((gbLcdMode == 1) && (gbLcdTicks == 0x71))) || (!(register_LCDC & 0x80)))
-               return 0;
-            else
-               return register_LY;
-         case 0x45:
-            return register_LYC;
-         case 0x46:
-            return register_DMA;
-         case 0x4a:
-            return register_WY;
-         case 0x4b:
-            return register_WX;
+         int joystate = gbJoymask[joy];
+         if (!(joystate & 0x80)) P1 |= 0x08;
+         if (!(joystate & 0x40)) P1 |= 0x04;
+         if (!(joystate & 0x20)) P1 |= 0x02;
+         if (!(joystate & 0x10)) P1 |= 0x01;
+         gbMemory[0xff00] = P1;
+      }
+      else if ((P1 & 0x30) == 0x10)
+      {
+         int joy = 0;
+         P1 &= 0xf0;
+         if (gbSgbMode && gbSgbMultiplayer)
+         {
+            switch (gbSgbNextController)
+            {
+            case 0x0f: joy = 0; break;
+            case 0x0e: joy = 1; break;
+            case 0x0d: joy = 2; break;
+            case 0x0c: joy = 3; break;
+            default: joy = 0; break;
+            }
+         }
+         int joystate = gbJoymask[joy];
+         if (!(joystate & 0x08)) P1 |= 0x08;
+         if (!(joystate & 0x04)) P1 |= 0x04;
+         if (!(joystate & 0x02)) P1 |= 0x02;
+         if (!(joystate & 0x01)) P1 |= 0x01;
+         gbMemory[0xff00] = P1;
+      }
+      else
+      {
+         if (gbSgbMode && gbSgbMultiplayer)
+         {
+            gbMemory[0xff00] = 0xf0 | gbSgbNextController;
+         }
+         else
+         {
+            gbMemory[0xff00] = 0xff;
+         }
+      }
+      return gbMemory[0xff00];
+   }
+   case 0x01:
+      return gbMemory[0xff01];
+   case 0x02:
+      return (gbMemory[0xff02]);
+   case 0x03:
+      log("Undocumented Memory register read %04x PC=%04x\n",
+          address,
+          PC.W);
+      return 0xff;
+   case 0x04:
+      return register_DIV;
+   case 0x05:
+      return register_TIMA;
+   case 0x06:
+      return register_TMA;
+   case 0x07:
+      return (0xf8 | register_TAC);
+   case 0x08:
+   case 0x09:
+   case 0x0a:
+   case 0x0b:
+   case 0x0c:
+   case 0x0d:
+   case 0x0e:
+      log("Undocumented Memory register read %04x PC=%04x\n",
+          address,
+          PC.W);
+      return 0xff;
+   case 0x0f:
+      return (0xe0 | gbMemory[0xff0f]);
+   case 0x10:
+   case 0x11:
+   case 0x12:
+   case 0x13:
+   case 0x14:
+   case 0x15:
+   case 0x16:
+   case 0x17:
+   case 0x18:
+   case 0x19:
+   case 0x1a:
+   case 0x1b:
+   case 0x1c:
+   case 0x1d:
+   case 0x1e:
+   case 0x1f:
+   case 0x20:
+   case 0x21:
+   case 0x22:
+   case 0x23:
+   case 0x24:
+   case 0x25:
+   case 0x26:
+   case 0x27:
+   case 0x28:
+   case 0x29:
+   case 0x2a:
+   case 0x2b:
+   case 0x2c:
+   case 0x2d:
+   case 0x2e:
+   case 0x2f:
+   case 0x30:
+   case 0x31:
+   case 0x32:
+   case 0x33:
+   case 0x34:
+   case 0x35:
+   case 0x36:
+   case 0x37:
+   case 0x38:
+   case 0x39:
+   case 0x3a:
+   case 0x3b:
+   case 0x3c:
+   case 0x3d:
+   case 0x3e:
+   case 0x3f:
+      return gbSoundRead(soundTicks, address);
+   case 0x40:
+      return register_LCDC;
+   case 0x41:
+      // This is a GB/C only bug (ie. not GBA/SP).
+      if ((gbHardware & 7) && (gbLcdMode == 2) && (gbLcdModeDelayed == 1) && (!gbSpeed))
+         return (0x80 | (gbMemory[0xff41] & 0xFC));
+      else
+         return (0x80 | gbMemory[0xff41]);
+   case 0x42:
+      return register_SCY;
+   case 0x43:
+      return register_SCX;
+   case 0x44:
+      if (((gbHardware & 7) && ((gbLcdMode == 1) && (gbLcdTicks == 0x71))) || (!(register_LCDC & 0x80)))
+         return 0;
+      else
+         return register_LY;
+   case 0x45:
+      return register_LYC;
+   case 0x46:
+      return register_DMA;
+   case 0x47:
+   case 0x48:
+   case 0x49:
+      break;
+   case 0x4a:
+      return register_WY;
+   case 0x4b:
+      return register_WX;
+   case 0xff:
+      return register_IE;
+   default:
+      if (gbCgbMode)
+      {
+         switch (address & 0x00ff)
+         {
          case 0x4c:
             return 0xff;
+         case 0x4d:
+            goto done;
          case 0x4f:
             return (0xfe | register_VBK);
          case 0x51:
@@ -1582,44 +1372,182 @@ uint8_t gbReadMemory(uint16_t address)
             return register_HDMA5;
          case 0x68:
          case 0x6a:
-            if (gbCgbMode)
-               return (0x40 | gbMemory[address]);
-            else
-               return 0xc0;
+            return (0x40 | gbMemory[address]);
          case 0x69:
          case 0x6b:
-            if (gbCgbMode)
-            {
-               if (gbCgbPaletteAccessValid())
-                  return (gbMemory[address]);
-               else
-                  return 0xff;
-            }
-            else
-               return 0xff;
+            if (gbCgbPaletteAccessValid())
+               return (gbMemory[address]);
+            break;
          case 0x70:
-            if (gbCgbMode)
-               return (0xf8 | register_SVBK);
-            else
-               return 0xff;
-         case 0xff:
-            return register_IE;
+            return (0xf8 | register_SVBK);
+         }
+      }
+      return 0xFF;
+   }
+
+done:
+   return gbMemoryMap[address >> 12][address & 0x0fff];
+}
+
+void gbWriteMemory(uint16_t address, uint8_t value)
+{
+   switch (address >> 12)
+   {
+   // ROM
+   case GB_MEM_CART_BANK0:
+   case GB_MEM_CART_BANK0 + 1:
+   case GB_MEM_CART_BANK0 + 2:
+   case GB_MEM_CART_BANK0 + 3:
+   case GB_MEM_CART_BANK1:
+   case GB_MEM_CART_BANK1 + 1:
+   case GB_MEM_CART_BANK1 + 2:
+   case GB_MEM_CART_BANK1 + 3:
+      if (mapper)
+         (*mapper)(address, value);
+      return;
+   
+   // VRAM
+   case GB_MEM_VRAM:
+   case GB_MEM_VRAM + 1:
+      if (gbVramWriteAccessValid())
+         gbMemoryMap[address >> 12][address & 0x0fff] = value;
+      return;
+   
+   // external RAM
+   case GB_MEM_EXTERNAL_RAM:
+   case GB_MEM_EXTERNAL_RAM + 1:
+      // Is that a correct fix ??? (it used to be 'if (mapper)')...
+      if (mapperRAM)
+         (*mapperRAM)(address, value);
+      return;
+
+   // WRAM Bank0/1
+   case GB_MEM_WRAM_BANK0:
+   case GB_MEM_WRAM_BANK1:
+      gbMemoryMap[address >> 12][address & 0x0fff] = value;
+      return;
+
+   case GB_MEM_MIRROR:
+   case GB_MEM_F000:
+      if (address < GB_ADDRESS_OAM)
+      {
+         // Used for the mirroring of 0xC000 in 0xE000
+         address &= ~0x2000;
+         gbMemoryMap[address >> 12][address & 0x0fff] = value;
+      }
+      else if (address < GB_ADDRESS_UNUSUABLE)
+      {
+         // OAM not accessible during mode 2 & 3.
+         if (((gbHardware & 0xa) && ((gbLcdMode | gbLcdModeDelayed) & 2)) ||
+               ((gbHardware & 5) && (((gbLcdModeDelayed == 2) && (gbLcdTicksDelayed <= GBLCD_MODE_2_CLOCK_TICKS)) ||
+               (gbLcdModeDelayed == 3))))
+         {
+            return;
+         }
+         gbMemoryMap[address >> 12][address & 0x0fff] = value;
+      }
+      else if (address < GB_ADDRESS_IO)
+      {
+         // UNUSABLE: GBC allows reading/writing to this area
+         gbMemoryMap[address >> 12][address & 0x0fff] = value;
+      }
+      else if (address < GB_ADDRESS_HRAM)
+      {
+         gbWriteIO(address, value);
+      }
+      else if (address < GB_ADDRESS_IE)
+      {
+         // high RAM
+         gbMemoryMap[address >> 12][address & 0x0fff] = value;
+      }
+      else
+      {
+         // IE
+         gbWriteIO(GB_ADDRESS_IE, value);
       }
    }
-   // OAM not accessible during mode 2 & 3.
-   if (((address >= 0xfe00) && (address < 0xfea0)) && ((((gbLcdMode | gbLcdModeDelayed) & 2) && (!(gbSpeed && (gbHardware & 0x2) && !(gbLcdModeDelayed & 2) && (gbLcdMode == 2)))) || (gbSpeed && (gbHardware & 0x2) && (gbLcdModeDelayed == 0) && (gbLcdTicksDelayed == (GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299])))))
+}
+
+uint8_t gbReadMemory(uint16_t address)
+{
+   if (gbCheatMap[address])
+      return gbCheatRead(address);
+   
+   switch (address >> 12)
+   {
+   case GB_MEM_CART_BANK0:
+   case GB_MEM_CART_BANK0 + 1:
+   case GB_MEM_CART_BANK0 + 2:
+   case GB_MEM_CART_BANK0 + 3:
+   case GB_MEM_CART_BANK1:
+   case GB_MEM_CART_BANK1 + 1:
+   case GB_MEM_CART_BANK1 + 2:
+   case GB_MEM_CART_BANK1 + 3:
+      return gbMemoryMap[address >> 12][address & 0x0fff];
+
+   case GB_MEM_VRAM:
+   case GB_MEM_VRAM + 1:
+      if (gbVramReadAccessValid())
+         return gbMemoryMap[address >> 12][address & 0x0fff];
       return 0xff;
 
-   if ((address >= 0xfea0) && (address < 0xff00))
-   {
-      if (gbHardware & 1)
-         return ((((address + ((address >> 4) - 0xfea)) >> 2) & 1) ? 0x00 : 0xff);
-      else if (gbHardware & 2)
+   case GB_MEM_EXTERNAL_RAM:
+   case GB_MEM_EXTERNAL_RAM + 1:
+      // for the 2kb ram limit (fixes crash in shawu's story
+      // but now its sram test fails, as the it expects 8kb and not 2kb...
+      // So use the 'genericflashcard' option to fix it).
+      if (address <= (0xa000 + gbRamSizeMask))
+      {
+         if (mapperReadRAM)
+            return mapperReadRAM(address);
          return gbMemoryMap[address >> 12][address & 0x0fff];
-      else if (gbHardware & 4)
-         return ((((address + ((address >> 4) - 0xfea)) >> 2) & 1) ? 0xff : 0x00);
-      else if (gbHardware & 8)
-         return ((address & 0xf0) | ((address & 0xf0) >> 4));
+      }
+      return 0xff;
+
+   // WRAM bank0/1
+   case GB_MEM_WRAM_BANK0:
+   case GB_MEM_WRAM_BANK1:
+      return gbMemoryMap[address >> 12][address & 0x0fff];   
+   
+   case GB_MEM_MIRROR:
+   case GB_MEM_F000:
+      if (address < GB_ADDRESS_OAM)
+      {
+         // Used for the mirroring of 0xC000 in 0xE000
+         address &= ~0x2000;
+         return gbMemoryMap[address >> 12][address & 0x0fff];
+      }
+      if (address < GB_ADDRESS_UNUSUABLE)
+      {
+         // OAM not accessible during mode 2 & 3.
+         if (((address >= 0xfe00) && (address < 0xfea0)) &&
+               ((((gbLcdMode | gbLcdModeDelayed) & 2) && (!(gbSpeed && (gbHardware & 0x2) && !(gbLcdModeDelayed & 2) && (gbLcdMode == 2)))) ||
+               (gbSpeed && (gbHardware & 0x2) && (gbLcdModeDelayed == 0) && (gbLcdTicksDelayed == (GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299])))))
+         {
+            return 0xff;
+         }
+         return gbMemoryMap[address >> 12][address & 0x0fff];
+      }
+      if (address < GB_ADDRESS_IO)
+      {
+         if (gbHardware & 1)
+            return ((((address + ((address >> 4) - 0xfea)) >> 2) & 1) ? 0x00 : 0xff);
+         else if (gbHardware & 2)
+            return gbMemoryMap[address >> 12][address & 0x0fff];
+         else if (gbHardware & 4)
+            return ((((address + ((address >> 4) - 0xfea)) >> 2) & 1) ? 0xff : 0x00);
+         else if (gbHardware & 8)
+            return ((address & 0xf0) | ((address & 0xf0) >> 4));
+      }
+      if (address < GB_ADDRESS_HRAM)
+      {
+         return gbReadIO(address);
+      }
+      if (address < GB_ADDRESS_IE)
+      {
+         return gbMemoryMap[address >> 12][address & 0x0fff];
+      }
+      return gbReadIO(GB_ADDRESS_IE);
    }
 
    return gbMemoryMap[address >> 12][address & 0x0fff];
@@ -1691,8 +1619,6 @@ void gbSpeedSwitch()
       gbLcdLYIncrementTicksDelayed *= 2;
       gbLcdLYIncrementTicksDelayed--;
       gbSerialTicks *= 2;
-      //SOUND_CLOCK_TICKS = soundQuality * 24 * 2;
-      //soundTicks *= 2;
       gbLine99Ticks = 3;
    }
    else
@@ -1716,8 +1642,6 @@ void gbSpeedSwitch()
       gbLcdLYIncrementTicksDelayed++;
       gbLcdLYIncrementTicksDelayed >>= 1;
       gbSerialTicks /= 2;
-      //SOUND_CLOCK_TICKS = soundQuality * 24;
-      //soundTicks /= 2;
       gbLine99Ticks = 1;
       if (gbHardware & 8)
          gbLine99Ticks++;
@@ -2055,8 +1979,8 @@ void gbReset()
       gbMemory[0xff02] = 0x7e;
 
    gbMemory[0xff03] = 0xff;
-   int i;
-   for (i = 0x8; i < 0xf; i++)
+
+   for (int i = 0x8; i < 0xf; i++)
       gbMemory[0xff00 + i] = 0xff;
 
    gbMemory[0xff13] = 0xff;
@@ -2065,22 +1989,22 @@ void gbReset()
    gbMemory[0xff1d] = 0xff;
    gbMemory[0xff1f] = 0xff;
 
-   for (i = 0x27; i < 0x30; i++)
+   for (int i = 0x27; i < 0x30; i++)
       gbMemory[0xff00 + i] = 0xff;
 
    gbMemory[0xff4c] = 0xff;
    gbMemory[0xff4e] = 0xff;
    gbMemory[0xff50] = 0xff;
 
-   for (i = 0x57; i < 0x68; i++)
+   for (int i = 0x57; i < 0x68; i++)
       gbMemory[0xff00 + i] = 0xff;
 
-   for (i = 0x5d; i < 0x70; i++)
+   for (int i = 0x5d; i < 0x70; i++)
       gbMemory[0xff00 + i] = 0xff;
 
    gbMemory[0xff71] = 0xff;
 
-   for (i = 0x78; i < 0x80; i++)
+   for (int i = 0x78; i < 0x80; i++)
       gbMemory[0xff00 + i] = 0xff;
 
    if (gbHardware & 0xa)
@@ -2209,7 +2133,7 @@ void gbReset()
 
    if (gbCgbMode)
    {
-      for (i = 0; i < 0x20; i++)
+      for (int i = 0; i < 0x20; i++)
          gbPalette[i] = 0x7fff;
 
       // This is just to show that the starting values of the OBJ palettes are different
@@ -2334,7 +2258,7 @@ void gbReset()
    }
    else
    {
-      for (i = 0; i < 8; i++)
+      for (int i = 0; i < 8; i++)
          gbPalette[i] = systemGbPalette[gbPaletteOption * 8 + i];
    }
 
@@ -2375,7 +2299,7 @@ void gbReset()
       gbSgbResetFlag = false;
    }
 
-   for (i = 0; i < 4; i++)
+   for (int i = 0; i < 4; i++)
       gbBgp[i] = gbObp0[i] = gbObp1[i] = i;
 
    memset(&gbDataMBC1, 0, sizeof(gbDataMBC1));
@@ -2494,25 +2418,25 @@ bool gbReadGSASnapshot(const char* fileName)
    fseek(file, 0x13, SEEK_SET);
    switch (gbRomType)
    {
-      case 0x03:
-      case 0x0f:
-      case 0x10:
-      case 0x13:
-      case 0x1b:
-      case 0x1e:
-      case 0xff:
-         FREAD_UNCHECKED(gbRam, 1, (gbRamSizeMask + 1), file);
-         break;
-      case 0x06:
-      case 0x22:
-         FREAD_UNCHECKED(&gbMemory[0xa000], 1, 256, file);
-         break;
-      default:
-         systemMessage(MSG_UNSUPPORTED_SNAPSHOT_FILE,
-             N_("Unsupported snapshot file %s"),
-             fileName);
-         fclose(file);
-         return false;
+   case 0x03:
+   case 0x0f:
+   case 0x10:
+   case 0x13:
+   case 0x1b:
+   case 0x1e:
+   case 0xff:
+      FREAD_UNCHECKED(gbRam, 1, (gbRamSizeMask + 1), file);
+      break;
+   case 0x06:
+   case 0x22:
+      FREAD_UNCHECKED(&gbMemory[0xa000], 1, 256, file);
+      break;
+   default:
+      systemMessage(MSG_UNSUPPORTED_SNAPSHOT_FILE,
+          N_("Unsupported snapshot file %s"),
+          fileName);
+      fclose(file);
+      return false;
    }
    fclose(file);
    gbReset();
@@ -2813,113 +2737,113 @@ bool gbUpdateSizes()
 
    switch (gbRomType)
    {
-      case 0x00:
-      case 0x01:
-      case 0x02:
-      case 0x03:
-      case 0x08:
-      case 0x09:
-         // MBC 1
-         mapper = mapperMBC1ROM;
-         mapperRAM = mapperMBC1RAM;
-         mapperReadRAM = mapperMBC1ReadRAM;
-         break;
-      case 0x05:
-      case 0x06:
-         // MBC2
-         mapper = mapperMBC2ROM;
-         mapperRAM = mapperMBC2RAM;
-         gbRamSize = 0x200;
-         gbRamSizeMask = 0x1ff;
-         break;
-      case 0x0b:
-      case 0x0c:
-      case 0x0d:
-         // MMM01
-         mapper = mapperMMM01ROM;
-         mapperRAM = mapperMMM01RAM;
-         break;
-      case 0x0f:
-      case 0x10:
-      case 0x11:
-      case 0x12:
-      case 0x13:
-      case 0xfc:
-         // MBC 3
-         mapper = mapperMBC3ROM;
-         mapperRAM = mapperMBC3RAM;
-         mapperReadRAM = mapperMBC3ReadRAM;
-         break;
-      case 0x19:
-      case 0x1a:
-      case 0x1b:
-         // MBC5
-         mapper = mapperMBC5ROM;
-         mapperRAM = mapperMBC5RAM;
-         mapperReadRAM = mapperMBC5ReadRAM;
-         break;
-      case 0x1c:
-      case 0x1d:
-      case 0x1e:
-         // MBC 5 Rumble
-         mapper = mapperMBC5ROM;
-         mapperRAM = mapperMBC5RAM;
-         mapperReadRAM = mapperMBC5ReadRAM;
-         break;
-      case 0x22:
-         // MBC 7
-         mapper = mapperMBC7ROM;
-         mapperRAM = mapperMBC7RAM;
-         mapperReadRAM = mapperMBC7ReadRAM;
-         gbRamSize = 0x200;
-         gbRamSizeMask = 0x1ff;
-         break;
-      // GG (GameGenie)
-      case 0x55:
-         mapper = mapperGGROM;
-         break;
-      case 0x56:
-         // GS (GameShark)
-         mapper = mapperGS3ROM;
-         break;
-      case 0xfd:
-         // TAMA5
-         if (gbRam != NULL)
-         {
-            free(gbRam);
-            gbRam = NULL;
-         }
+   case 0x00:
+   case 0x01:
+   case 0x02:
+   case 0x03:
+   case 0x08:
+   case 0x09:
+      // MBC 1
+      mapper = mapperMBC1ROM;
+      mapperRAM = mapperMBC1RAM;
+      mapperReadRAM = mapperMBC1ReadRAM;
+      break;
+   case 0x05:
+   case 0x06:
+      // MBC2
+      mapper = mapperMBC2ROM;
+      mapperRAM = mapperMBC2RAM;
+      gbRamSize = 0x200;
+      gbRamSizeMask = 0x1ff;
+      break;
+   case 0x0b:
+   case 0x0c:
+   case 0x0d:
+      // MMM01
+      mapper = mapperMMM01ROM;
+      mapperRAM = mapperMMM01RAM;
+      break;
+   case 0x0f:
+   case 0x10:
+   case 0x11:
+   case 0x12:
+   case 0x13:
+   case 0xfc:
+      // MBC 3
+      mapper = mapperMBC3ROM;
+      mapperRAM = mapperMBC3RAM;
+      mapperReadRAM = mapperMBC3ReadRAM;
+      break;
+   case 0x19:
+   case 0x1a:
+   case 0x1b:
+      // MBC5
+      mapper = mapperMBC5ROM;
+      mapperRAM = mapperMBC5RAM;
+      mapperReadRAM = mapperMBC5ReadRAM;
+      break;
+   case 0x1c:
+   case 0x1d:
+   case 0x1e:
+      // MBC 5 Rumble
+      mapper = mapperMBC5ROM;
+      mapperRAM = mapperMBC5RAM;
+      mapperReadRAM = mapperMBC5ReadRAM;
+      break;
+   case 0x22:
+      // MBC 7
+      mapper = mapperMBC7ROM;
+      mapperRAM = mapperMBC7RAM;
+      mapperReadRAM = mapperMBC7ReadRAM;
+      gbRamSize = 0x200;
+      gbRamSizeMask = 0x1ff;
+      break;
+   // GG (GameGenie)
+   case 0x55:
+      mapper = mapperGGROM;
+      break;
+   case 0x56:
+      // GS (GameShark)
+      mapper = mapperGS3ROM;
+      break;
+   case 0xfd:
+      // TAMA5
+      if (gbRam != NULL)
+      {
+         free(gbRam);
+         gbRam = NULL;
+      }
 
-         ramsize = 3;
-         gbRamSize = gbRamSizes[3];
-         gbRamSizeMask = gbRamSizesMasks[3];
-         gbRamFill = 0x0;
+      ramsize = 3;
+      gbRamSize = gbRamSizes[3];
+      gbRamSizeMask = gbRamSizesMasks[3];
+      gbRamFill = 0x0;
 
-         gbTAMA5ramSize = 0x100;
+      gbTAMA5ramSize = 0x100;
 
-         if (gbTAMA5ram == NULL)
-            gbTAMA5ram = (uint8_t*)malloc(gbTAMA5ramSize);
-         memset(gbTAMA5ram, 0x0, gbTAMA5ramSize);
+      if (gbTAMA5ram == NULL)
+         gbTAMA5ram = (uint8_t*)malloc(gbTAMA5ramSize);
+      memset(gbTAMA5ram, 0x0, gbTAMA5ramSize);
 
-         mapperRAM = mapperTAMA5RAM;
-         mapperReadRAM = mapperTAMA5ReadRAM;
-         mapperUpdateClock = memoryUpdateTAMA5Clock;
-         break;
-      case 0xfe:
-         // HuC3
-         mapper = mapperHuC3ROM;
-         mapperRAM = mapperHuC3RAM;
-         mapperReadRAM = mapperHuC3ReadRAM;
-         break;
-      case 0xff:
-         // HuC1
-         mapper = mapperHuC1ROM;
-         mapperRAM = mapperHuC1RAM;
-         break;
-      default:
-         systemMessage(MSG_UNKNOWN_CARTRIDGE_TYPE,
-             N_("Unknown cartridge type %02x"), gbRomType);
-         return false;
+      mapperRAM = mapperTAMA5RAM;
+      mapperReadRAM = mapperTAMA5ReadRAM;
+      mapperUpdateClock = memoryUpdateTAMA5Clock;
+      break;
+   case 0xfe:
+      // HuC3
+      mapper = mapperHuC3ROM;
+      mapperRAM = mapperHuC3RAM;
+      mapperReadRAM = mapperHuC3ReadRAM;
+      break;
+   case 0xff:
+      // HuC1
+      mapper = mapperHuC1ROM;
+      mapperRAM = mapperHuC1RAM;
+      break;
+   default:
+      systemMessage(MSG_UNKNOWN_CARTRIDGE_TYPE,
+          N_("Unknown cartridge type %02x"), gbRomType);
+      return false;
    }
 
    if (gbRamSize)
@@ -2930,47 +2854,47 @@ bool gbUpdateSizes()
 
    switch (gbRomType)
    {
-      case 0x03:
-      case 0x06:
-      case 0x0d:
-      case 0x0f:
-      case 0x10:
-      case 0x13:
-      case 0x1b:
-      case 0x1d:
-      case 0x1e:
-      case 0x22:
-      case 0xfd:
-      case 0xff:
-         gbBattery = 1;
-         break;
-      default:
-         gbBattery = 0;
-         break;
+   case 0x03:
+   case 0x06:
+   case 0x0d:
+   case 0x0f:
+   case 0x10:
+   case 0x13:
+   case 0x1b:
+   case 0x1d:
+   case 0x1e:
+   case 0x22:
+   case 0xfd:
+   case 0xff:
+      gbBattery = 1;
+      break;
+   default:
+      gbBattery = 0;
+      break;
    }
 
    switch (gbRomType)
    {
-      case 0x1c:
-      case 0x1d:
-      case 0x1e:
-         gbRumble = 1;
-         break;
-      default:
-         gbRumble = 0;
-         break;
+   case 0x1c:
+   case 0x1d:
+   case 0x1e:
+      gbRumble = 1;
+      break;
+   default:
+      gbRumble = 0;
+      break;
    }
 
    switch (gbRomType)
    {
-      case 0x0f:
-      case 0x10: // mbc3
-      case 0xfd: // tama5
-         gbRTCPresent = 1;
-         break;
-      default:
-         gbRTCPresent = 0;
-         break;
+   case 0x0f:
+   case 0x10: // mbc3
+   case 0xfd: // tama5
+      gbRTCPresent = 1;
+      break;
+   default:
+      gbRTCPresent = 0;
+      break;
    }
 
    gbInit();
@@ -3148,11 +3072,11 @@ void gbEmulate(int ticksToStop)
 
          switch (opcode)
          {
-            case 0xCB:
-               // extended opcode
-               opcode2 = opcode = gbReadMemory(PC.W++);
-               clockTicks = gbCyclesCB[opcode];
-               break;
+         case 0xCB:
+            // extended opcode
+            opcode2 = opcode = gbReadMemory(PC.W++);
+            clockTicks = gbCyclesCB[opcode];
+            break;
          }
          gbOldClockTicks = clockTicks - 1;
          gbIntBreak = 1;
@@ -3290,63 +3214,44 @@ void gbEmulate(int ticksToStop)
 
                switch (gbLcdMode)
                {
-                  case 0:
+               case 0:
+               {
+                  // H-Blank
+                  // check if we reached the V-Blank period
+                  if (register_LY == 144)
                   {
-                     // H-Blank
-                     // check if we reached the V-Blank period
-                     if (register_LY == 144)
+                     // Yes, V-Blank
+                     // set the LY increment counter
+                     if (gbHardware & 0x5)
                      {
-                        // Yes, V-Blank
-                        // set the LY increment counter
-                        if (gbHardware & 0x5)
-                        {
-                           register_IF |= 1; // V-Blank interrupt
-                        }
-
-                        gbInt48Signal &= ~6;
-                        if (register_STAT & 0x10)
-                        {
-                           // send LCD interrupt only if no interrupt 48h signal...
-                           if ((!(gbInt48Signal & 1)) && ((!(gbInt48Signal & 8)) || (gbHardware & 0x0a)))
-                           {
-                              register_IF |= 2;
-                              gbInterruptLaunched |= 2;
-                              if (gbHardware & 0xa)
-                                 gbInterruptWait = 1;
-                           }
-                           gbInt48Signal |= 2;
-                        }
-                        gbInt48Signal &= ~1;
-
-                        gbLcdTicks += GBLCD_MODE_1_CLOCK_TICKS;
-                        gbLcdMode = 1;
+                        register_IF |= 1; // V-Blank interrupt
                      }
-                     else
+
+                     gbInt48Signal &= ~6;
+                     if (register_STAT & 0x10)
                      {
-                        // go the the OAM being accessed mode
-                        gbLcdTicks += GBLCD_MODE_2_CLOCK_TICKS;
-                        gbLcdMode = 2;
-
-                        gbInt48Signal &= ~6;
-                        if (register_STAT & 0x20)
+                        // send LCD interrupt only if no interrupt 48h signal...
+                        if ((!(gbInt48Signal & 1)) && ((!(gbInt48Signal & 8)) || (gbHardware & 0x0a)))
                         {
-                           // send LCD interrupt only if no interrupt 48h signal...
-                           if (!gbInt48Signal)
-                           {
-                              register_IF |= 2;
-                              gbInterruptLaunched |= 2;
-                           }
-                           gbInt48Signal |= 4;
+                           register_IF |= 2;
+                           gbInterruptLaunched |= 2;
+                           if (gbHardware & 0xa)
+                              gbInterruptWait = 1;
                         }
-                        gbInt48Signal &= ~1;
+                        gbInt48Signal |= 2;
                      }
+                     gbInt48Signal &= ~1;
+
+                     gbLcdTicks += GBLCD_MODE_1_CLOCK_TICKS;
+                     gbLcdMode = 1;
                   }
-                  break;
-                  case 1:
+                  else
                   {
-                     // V-Blank
-                     // next mode is OAM being accessed mode
-                     gbInt48Signal &= ~5;
+                     // go the the OAM being accessed mode
+                     gbLcdTicks += GBLCD_MODE_2_CLOCK_TICKS;
+                     gbLcdMode = 2;
+
+                     gbInt48Signal &= ~6;
                      if (register_STAT & 0x20)
                      {
                         // send LCD interrupt only if no interrupt 48h signal...
@@ -3354,100 +3259,119 @@ void gbEmulate(int ticksToStop)
                         {
                            register_IF |= 2;
                            gbInterruptLaunched |= 2;
-                           if ((gbHardware & 0xa) && (IFF & 0x80))
-                              gbInterruptWait = 1;
                         }
                         gbInt48Signal |= 4;
                      }
-                     gbInt48Signal &= ~2;
-
-                     gbLcdTicks += GBLCD_MODE_2_CLOCK_TICKS;
-
-                     gbLcdMode = 2;
-                     register_LY = 0x00;
+                     gbInt48Signal &= ~1;
                   }
-                  break;
-                  case 2:
+               }
+               break;
+               case 1:
+               {
+                  // V-Blank
+                  // next mode is OAM being accessed mode
+                  gbInt48Signal &= ~5;
+                  if (register_STAT & 0x20)
                   {
-
-                     // OAM being accessed mode
-                     // next mode is OAM and VRAM in use
-                     if ((gbScreenOn) && (register_LCDC & 0x80))
+                     // send LCD interrupt only if no interrupt 48h signal...
+                     if (!gbInt48Signal)
                      {
-                        gbRenderLine(false);
-                        // Used to add a one tick delay when a window line is drawn.
-                        //(fixes a part of Carmaggedon problem)
-                        if ((register_LCDC & 0x01 || gbCgbMode) && (register_LCDC & 0x20) && (gbWindowLine != -2))
+                        register_IF |= 2;
+                        gbInterruptLaunched |= 2;
+                        if ((gbHardware & 0xa) && (IFF & 0x80))
+                           gbInterruptWait = 1;
+                     }
+                     gbInt48Signal |= 4;
+                  }
+                  gbInt48Signal &= ~2;
+
+                  gbLcdTicks += GBLCD_MODE_2_CLOCK_TICKS;
+
+                  gbLcdMode = 2;
+                  register_LY = 0x00;
+               }
+               break;
+               case 2:
+               {
+
+                  // OAM being accessed mode
+                  // next mode is OAM and VRAM in use
+                  if ((gbScreenOn) && (register_LCDC & 0x80))
+                  {
+                     gbRenderLine(false);
+                     // Used to add a one tick delay when a window line is drawn.
+                     //(fixes a part of Carmaggedon problem)
+                     if ((register_LCDC & 0x01 || gbCgbMode) && (register_LCDC & 0x20) && (gbWindowLine != -2))
+                     {
+
+                        int tempinUseRegister_WY = inUseRegister_WY;
+                        int tempgbWindowLine = gbWindowLine;
+
+                        if ((tempgbWindowLine == -1) || (tempgbWindowLine > 144))
+                        {
+                           tempinUseRegister_WY = oldRegister_WY;
+                           if (register_LY > oldRegister_WY)
+                              tempgbWindowLine = 146;
+                        }
+
+                        if (register_LY >= tempinUseRegister_WY)
                         {
 
-                           int tempinUseRegister_WY = inUseRegister_WY;
-                           int tempgbWindowLine = gbWindowLine;
+                           if (tempgbWindowLine == -1)
+                              tempgbWindowLine = 0;
 
-                           if ((tempgbWindowLine == -1) || (tempgbWindowLine > 144))
+                           int wx = register_WX;
+                           wx -= 7;
+                           if (wx < 0)
+                              wx = 0;
+
+                           if ((wx <= 159) && (tempgbWindowLine <= 143))
                            {
-                              tempinUseRegister_WY = oldRegister_WY;
-                              if (register_LY > oldRegister_WY)
-                                 tempgbWindowLine = 146;
-                           }
-
-                           if (register_LY >= tempinUseRegister_WY)
-                           {
-
-                              if (tempgbWindowLine == -1)
-                                 tempgbWindowLine = 0;
-
-                              int wx = register_WX;
-                              wx -= 7;
-                              if (wx < 0)
-                                 wx = 0;
-
-                              if ((wx <= 159) && (tempgbWindowLine <= 143))
-                              {
-                                 for (int i = wx; i < 300; i++)
-                                    if (gbSpeed)
-                                       gbSpritesTicks[i] += 3;
-                                    else
-                                       gbSpritesTicks[i] += 1;
-                              }
+                              for (int i = wx; i < 300; i++)
+                                 if (gbSpeed)
+                                    gbSpritesTicks[i] += 3;
+                                 else
+                                    gbSpritesTicks[i] += 1;
                            }
                         }
                      }
-
-                     gbInt48Signal &= ~7;
-
-                     gbLcdTicks += GBLCD_MODE_3_CLOCK_TICKS + gbSpritesTicks[299];
-                     gbLcdMode = 3;
                   }
-                  break;
-                  case 3:
+
+                  gbInt48Signal &= ~7;
+
+                  gbLcdTicks += GBLCD_MODE_3_CLOCK_TICKS + gbSpritesTicks[299];
+                  gbLcdMode = 3;
+               }
+               break;
+               case 3:
+               {
+                  // OAM and VRAM in use
+                  // next mode is H-Blank
+
+                  gbInt48Signal &= ~7;
+                  if (register_STAT & 0x08)
                   {
-                     // OAM and VRAM in use
-                     // next mode is H-Blank
-
-                     gbInt48Signal &= ~7;
-                     if (register_STAT & 0x08)
+                     // send LCD interrupt only if no interrupt 48h signal...
+                     if (!(gbInt48Signal & 8))
                      {
-                        // send LCD interrupt only if no interrupt 48h signal...
-                        if (!(gbInt48Signal & 8))
-                        {
-                           register_IF |= 2;
-                           if ((gbHardware & 0xa) && (IFF & 0x80))
-                              gbInterruptWait = 1;
-                        }
-                        gbInt48Signal |= 1;
+                        register_IF |= 2;
+                        if ((gbHardware & 0xa) && (IFF & 0x80))
+                           gbInterruptWait = 1;
                      }
-
-                     gbLcdTicks += GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299];
-
-                     gbLcdMode = 0;
-
-                     // No HDMA during HALT !
-                     if (gbHdmaOn && (!(IFF & 0x80) || (register_IE & register_IF & 0x1f)))
-                     {
-                        gbDoHdma();
-                     }
+                     gbInt48Signal |= 1;
                   }
-                  break;
+
+                  gbLcdTicks += GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299];
+
+                  gbLcdMode = 0;
+
+                  // No HDMA during HALT !
+                  if (gbHdmaOn && (!(IFF & 0x80) || (register_IE & register_IF & 0x1f)))
+                  {
+                     gbDoHdma();
+                  }
+               }
+               break;
                }
             }
 
@@ -3462,163 +3386,163 @@ void gbEmulate(int ticksToStop)
                gbLCDChangeHappened = false;
                switch (gbLcdModeDelayed)
                {
-                  case 0:
-                  {
-                     // H-Blank
+               case 0:
+               {
+                  // H-Blank
 
-                     memset(gbSCYLine, gbSCYLine[299], sizeof(gbSCYLine));
-                     memset(gbSCXLine, gbSCXLine[299], sizeof(gbSCXLine));
-                     memset(gbBgpLine, gbBgpLine[299], sizeof(gbBgpLine));
-                     memset(gbObp0Line, gbObp0Line[299], sizeof(gbObp0Line));
-                     memset(gbObp1Line, gbObp1Line[299], sizeof(gbObp1Line));
-                     memset(gbSpritesTicks, gbSpritesTicks[299], sizeof(gbSpritesTicks));
+                  memset(gbSCYLine, gbSCYLine[299], sizeof(gbSCYLine));
+                  memset(gbSCXLine, gbSCXLine[299], sizeof(gbSCXLine));
+                  memset(gbBgpLine, gbBgpLine[299], sizeof(gbBgpLine));
+                  memset(gbObp0Line, gbObp0Line[299], sizeof(gbObp0Line));
+                  memset(gbObp1Line, gbObp1Line[299], sizeof(gbObp1Line));
+                  memset(gbSpritesTicks, gbSpritesTicks[299], sizeof(gbSpritesTicks));
 
-                     if (gbWindowLine < 0)
-                        oldRegister_WY = register_WY;
-                     // check if we reached the V-Blank period
-                     if (register_LY == 144)
-                     {
-                        // Yes, V-Blank
-                        // set the LY increment counter
-
-                        if (register_LCDC & 0x80)
-                        {
-                           if (gbHardware & 0xa)
-                           {
-
-                              register_IF |= 1; // V-Blank interrupt
-                              gbInterruptLaunched |= 1;
-                           }
-                        }
-
-                        gbLcdTicksDelayed += GBLCD_MODE_1_CLOCK_TICKS;
-                        gbLcdModeDelayed = 1;
-
-                        gbFrameCount++;
-                        systemFrame();
-
-                        if ((gbFrameCount % 10) == 0)
-                           system10Frames(60);
-
-                        if (gbFrameCount >= 60)
-                        {
-                           uint32_t currentTime = systemGetClock();
-                           if (currentTime != gbLastTime)
-                              systemShowSpeed(100000 / (currentTime - gbLastTime));
-                           else
-                              systemShowSpeed(0);
-                           gbLastTime = currentTime;
-                           gbFrameCount = 0;
-                        }
-
-                        int newmask = gbJoymask[0] & 255;
-
-                        if (newmask)
-                        {
-                           gbMemory[0xff0f] = register_IF |= 16;
-                        }
-
-                        newmask = (gbJoymask[0] >> 10);
-
-                        speedup = false;
-
-                        if (newmask & 1)
-                           speedup = true;
-
-                        gbCapture = (newmask & 2) ? true : false;
-
-                        if (gbCapture && !gbCapturePrevious)
-                        {
-                           gbCaptureNumber++;
-                           systemScreenCapture(gbCaptureNumber);
-                        }
-                        gbCapturePrevious = gbCapture;
-
-                        if (gbFrameSkipCount >= framesToSkip)
-                        {
-
-                           if (!gbSgbMask)
-                           {
-                              if (gbBorderOn)
-                                 gbSgbRenderBorder();
-                              //if (gbScreenOn)
-                              systemDrawScreen(pix);
-                              if (systemPauseOnFrame())
-                                 ticksToStop = 0;
-                           }
-                           gbFrameSkipCount = 0;
-                        }
-                        else
-                           gbFrameSkipCount++;
-
-                        frameDone = true;
-                     }
-                     else
-                     {
-                        // go the the OAM being accessed mode
-                        gbLcdTicksDelayed += GBLCD_MODE_2_CLOCK_TICKS;
-                        gbLcdModeDelayed = 2;
-                        gbInt48Signal &= ~3;
-                     }
-                  }
-                  break;
-                  case 1:
-                  {
-                     // V-Blank
-                     // next mode is OAM being accessed mode
-
-                     // gbScreenOn = true;
-
+                  if (gbWindowLine < 0)
                      oldRegister_WY = register_WY;
-
-                     gbLcdTicksDelayed += GBLCD_MODE_2_CLOCK_TICKS;
-                     gbLcdModeDelayed = 2;
-
-                     // reset the window line
-                     gbWindowLine = -1;
-                  }
-                  break;
-                  case 2:
+                  // check if we reached the V-Blank period
+                  if (register_LY == 144)
                   {
-                     // OAM being accessed mode
-                     // next mode is OAM and VRAM in use
-                     gbLcdTicksDelayed += GBLCD_MODE_3_CLOCK_TICKS + gbSpritesTicks[299];
-                     gbLcdModeDelayed = 3;
-                  }
-                  break;
-                  case 3:
-                  {
-                     // OAM and VRAM in use
-                     // next mode is H-Blank
-                     if ((register_LY < 144) && (register_LCDC & 0x80) && gbScreenOn)
+                     // Yes, V-Blank
+                     // set the LY increment counter
+
+                     if (register_LCDC & 0x80)
                      {
+                        if (gbHardware & 0xa)
+                        {
+
+                           register_IF |= 1; // V-Blank interrupt
+                           gbInterruptLaunched |= 1;
+                        }
+                     }
+
+                     gbLcdTicksDelayed += GBLCD_MODE_1_CLOCK_TICKS;
+                     gbLcdModeDelayed = 1;
+
+                     gbFrameCount++;
+                     systemFrame();
+
+                     if ((gbFrameCount % 10) == 0)
+                        system10Frames(60);
+
+                     if (gbFrameCount >= 60)
+                     {
+                        uint32_t currentTime = systemGetClock();
+                        if (currentTime != gbLastTime)
+                           systemShowSpeed(100000 / (currentTime - gbLastTime));
+                        else
+                           systemShowSpeed(0);
+                        gbLastTime = currentTime;
+                        gbFrameCount = 0;
+                     }
+
+                     int newmask = gbJoymask[0] & 255;
+
+                     if (newmask)
+                     {
+                        gbMemory[0xff0f] = register_IF |= 16;
+                     }
+
+                     newmask = (gbJoymask[0] >> 10);
+
+                     speedup = false;
+
+                     if (newmask & 1)
+                        speedup = true;
+
+                     gbCapture = (newmask & 2) ? true : false;
+
+                     if (gbCapture && !gbCapturePrevious)
+                     {
+                        gbCaptureNumber++;
+                        systemScreenCapture(gbCaptureNumber);
+                     }
+                     gbCapturePrevious = gbCapture;
+
+                     if (gbFrameSkipCount >= framesToSkip)
+                     {
+
                         if (!gbSgbMask)
                         {
-                           if (gbFrameSkipCount >= framesToSkip)
+                           if (gbBorderOn)
+                              gbSgbRenderBorder();
+                           //if (gbScreenOn)
+                           systemDrawScreen(pix);
+                           if (systemPauseOnFrame())
+                              ticksToStop = 0;
+                        }
+                        gbFrameSkipCount = 0;
+                     }
+                     else
+                        gbFrameSkipCount++;
+
+                     frameDone = true;
+                  }
+                  else
+                  {
+                     // go the the OAM being accessed mode
+                     gbLcdTicksDelayed += GBLCD_MODE_2_CLOCK_TICKS;
+                     gbLcdModeDelayed = 2;
+                     gbInt48Signal &= ~3;
+                  }
+               }
+               break;
+               case 1:
+               {
+                  // V-Blank
+                  // next mode is OAM being accessed mode
+
+                  // gbScreenOn = true;
+
+                  oldRegister_WY = register_WY;
+
+                  gbLcdTicksDelayed += GBLCD_MODE_2_CLOCK_TICKS;
+                  gbLcdModeDelayed = 2;
+
+                  // reset the window line
+                  gbWindowLine = -1;
+               }
+               break;
+               case 2:
+               {
+                  // OAM being accessed mode
+                  // next mode is OAM and VRAM in use
+                  gbLcdTicksDelayed += GBLCD_MODE_3_CLOCK_TICKS + gbSpritesTicks[299];
+                  gbLcdModeDelayed = 3;
+               }
+               break;
+               case 3:
+               {
+                  // OAM and VRAM in use
+                  // next mode is H-Blank
+                  if ((register_LY < 144) && (register_LCDC & 0x80) && gbScreenOn)
+                  {
+                     if (!gbSgbMask)
+                     {
+                        if (gbFrameSkipCount >= framesToSkip)
+                        {
+                           if (!gbBlackScreen)
                            {
-                              if (!gbBlackScreen)
-                              {
-                                 gbRenderLine(true);
-                              }
-                              else if (gbBlackScreen)
-                              {
-                                 uint16_t color = gbColorOption ? gbColorFilter[0] : 0;
-                                 if (!gbCgbMode)
-                                    color = gbColorOption ? gbColorFilter[gbPalette[3] & 0x7FFF] : gbPalette[3] & 0x7FFF;
-                                 for (int i = 0; i < 160; i++)
-                                 {
-                                    gbLineMix[i] = color;
-                                    gbLineBuffer[i] = 0;
-                                 }
-                              }
-                              gbDrawLine();
+                              gbRenderLine(true);
                            }
+                           else if (gbBlackScreen)
+                           {
+                              uint16_t color = gbColorOption ? gbColorFilter[0] : 0;
+                              if (!gbCgbMode)
+                                 color = gbColorOption ? gbColorFilter[gbPalette[3] & 0x7FFF] : gbPalette[3] & 0x7FFF;
+                              for (int i = 0; i < 160; i++)
+                              {
+                                 gbLineMix[i] = color;
+                                 gbLineBuffer[i] = 0;
+                              }
+                           }
+                           gbDrawLine();
                         }
                      }
-                     gbLcdTicksDelayed += GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299];
-                     gbLcdModeDelayed = 0;
                   }
-                  break;
+                  gbLcdTicksDelayed += GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299];
+                  gbLcdModeDelayed = 0;
+               }
+               break;
                }
             }
 
@@ -3928,13 +3852,13 @@ void gbEmulate(int ticksToStop)
       {
          switch (opcode1)
          {
-            case 0xCB:
-               // extended opcode
-               switch (opcode2)
-               {
+         case 0xCB:
+            // extended opcode
+            switch (opcode2)
+            {
 #include "gbCodesCB.h"
-               }
-               break;
+            }
+            break;
 #include "gbCodes.h"
          }
          execute = false;
@@ -4260,64 +4184,64 @@ bool gbReadSaveState(const uint8_t* data, unsigned)
 
    switch (gbRomType)
    {
-      case 0x00:
-      case 0x01:
-      case 0x02:
-      case 0x03:
-         // MBC 1
-         memoryUpdateMapMBC1();
-         break;
-      case 0x05:
-      case 0x06:
-         // MBC2
-         memoryUpdateMapMBC2();
-         break;
-      case 0x0b:
-      case 0x0c:
-      case 0x0d:
-         // MMM01
-         memoryUpdateMapMMM01();
-         break;
-      case 0x0f:
-      case 0x10:
-      case 0x11:
-      case 0x12:
-      case 0x13:
-         // MBC 3
-         memoryUpdateMapMBC3();
-         break;
-      case 0x19:
-      case 0x1a:
-      case 0x1b:
-         // MBC5
-         memoryUpdateMapMBC5();
-         break;
-      case 0x1c:
-      case 0x1d:
-      case 0x1e:
-         // MBC 5 Rumble
-         memoryUpdateMapMBC5();
-         break;
-      case 0x22:
-         // MBC 7
-         memoryUpdateMapMBC7();
-         break;
-      case 0x56:
-         // GS3
-         memoryUpdateMapGS3();
-         break;
-      case 0xfd:
-         // TAMA5
-         memoryUpdateMapTAMA5();
-         break;
-      case 0xfe:
-         // HuC3
-         memoryUpdateMapHuC3();
-         break;
-      case 0xff:
-         // HuC1
-         memoryUpdateMapHuC1();
-         break;
+   case 0x00:
+   case 0x01:
+   case 0x02:
+   case 0x03:
+      // MBC 1
+      memoryUpdateMapMBC1();
+      break;
+   case 0x05:
+   case 0x06:
+      // MBC2
+      memoryUpdateMapMBC2();
+      break;
+   case 0x0b:
+   case 0x0c:
+   case 0x0d:
+      // MMM01
+      memoryUpdateMapMMM01();
+      break;
+   case 0x0f:
+   case 0x10:
+   case 0x11:
+   case 0x12:
+   case 0x13:
+      // MBC 3
+      memoryUpdateMapMBC3();
+      break;
+   case 0x19:
+   case 0x1a:
+   case 0x1b:
+      // MBC5
+      memoryUpdateMapMBC5();
+      break;
+   case 0x1c:
+   case 0x1d:
+   case 0x1e:
+      // MBC 5 Rumble
+      memoryUpdateMapMBC5();
+      break;
+   case 0x22:
+      // MBC 7
+      memoryUpdateMapMBC7();
+      break;
+   case 0x56:
+      // GS3
+      memoryUpdateMapGS3();
+      break;
+   case 0xfd:
+      // TAMA5
+      memoryUpdateMapTAMA5();
+      break;
+   case 0xfe:
+      // HuC3
+      memoryUpdateMapHuC3();
+      break;
+   case 0xff:
+      // HuC1
+      memoryUpdateMapHuC1();
+      break;
    }
 
    if (gbCgbMode)
