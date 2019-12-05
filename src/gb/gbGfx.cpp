@@ -3,6 +3,7 @@
 #include "../Util.h"
 #include "gbGlobals.h"
 #include "gbSGB.h"
+#include "gbMemory.h"
 
 static const uint8_t gbInvertTab[256] = {
    0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
@@ -152,7 +153,7 @@ static void gbDrawBG()
                if (isCGB)
                {
                   // Use the DMG palette if we are in compat mode.
-                  if (gbMemory[0xff6c] & 1)
+                  if (gbMemory[REG_UNK6C] & 1)
                   {
                      c = gbBgp[c];
                   }
@@ -260,7 +261,7 @@ static void gbDrawBG()
             if (gbWindowLine == -1)
                gbWindowLine = 0;
 
-            int wx = register_WX;
+            int wx = gbMemory[REG_WX];
             int swx = 0;
             wx -= 7;
 
@@ -370,7 +371,7 @@ static void gbDrawBG()
                         if (isCGB)
                         {
                            // Use the DMG palette if we are in compat mode.
-                           if (gbMemory[0xff6c] & 1)
+                           if (gbMemory[REG_UNK6C] & 1)
                            {
                               c = gbBgp[c];
                            }
@@ -492,7 +493,7 @@ static void gbDrawSpriteTile(int tile, int x, int y, int t, int flags,
    int a = 0;
    int b = 0;
 
-   if (isCGB && (flags & 0x08) && !(gbMemory[0xff6c] & 1))
+   if (isCGB && (flags & 0x08) && !(gbMemory[REG_UNK6C] & 1))
    {
       a = bank1[address++];
       b = bank1[address++];
@@ -567,7 +568,7 @@ static void gbDrawSpriteTile(int tile, int x, int y, int t, int flags,
       if (isCGB)
       {
          // Use the DMG palette if we are in compat mode.
-         if (gbMemory[0xff6c] & 1)
+         if (gbMemory[REG_UNK6C] & 1)
          {
             c = pal[c] + ((flags & 0x10) >> 4) * 4 + 32;
          }

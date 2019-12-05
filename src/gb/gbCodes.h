@@ -79,14 +79,14 @@ case 0x10:
 // STOP
 opcode = gbReadMemory(PC.W++);
 if (gbCgbMode) {
-    if (gbMemory[0xff4d] & 1) {
+    if (gbMemory[REG_KEY1] & 1) {
         gbSpeedSwitch();
         // clockTicks += 228*144-(gbSpeed ? 62 : 63);
 
         if (gbSpeed == 0)
-            gbMemory[0xff4d] = 0x00;
+            gbMemory[REG_KEY1] = 0x00;
         else
-            gbMemory[0xff4d] = 0x80;
+            gbMemory[REG_KEY1] = 0x80;
     }
 }
 break;

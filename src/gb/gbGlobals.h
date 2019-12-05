@@ -52,11 +52,6 @@ extern uint8_t gbSpritesTicks[300];
 
 extern uint8_t register_LCDC;
 extern uint8_t register_LY;
-extern uint8_t register_SCY;
-extern uint8_t register_SCX;
-extern uint8_t register_WY;
-extern uint8_t register_WX;
-extern uint8_t register_VBK;
 extern uint8_t oldRegister_WY;
 
 extern int emulating;

@@ -4,30 +4,30 @@
 #include "../common/Types.h"
 #include <time.h>
 
-#define GB_ADDRESS_ROM_BANK0 0x0000
-#define GB_ADDRESS_ROM_BANK1 0x4000
-#define GB_ADDRESS_VRAM 0x8000
+#define GB_ADDRESS_ROM_BANK0    0x0000
+#define GB_ADDRESS_ROM_BANK1    0x4000
+#define GB_ADDRESS_VRAM         0x8000
 #define GB_ADDRESS_EXTERNAL_RAM 0xA000
-#define GB_ADDRESS_WRAM_BANK0 0xC000
-#define GB_ADDRESS_WRAM_BANK1 0xD000
-#define GB_ADDRESS_MIRROR 0xE000
-#define GB_ADDRESS_OAM 0xFE00
-#define GB_ADDRESS_UNUSUABLE 0xFEA0
-#define GB_ADDRESS_IO 0xFF00
-#define GB_ADDRESS_HRAM 0xFF80
-#define GB_ADDRESS_IE 0xFFFF
+#define GB_ADDRESS_WRAM_BANK0   0xC000
+#define GB_ADDRESS_WRAM_BANK1   0xD000
+#define GB_ADDRESS_MIRROR       0xE000
+#define GB_ADDRESS_OAM          0xFE00
+#define GB_ADDRESS_UNUSUABLE    0xFEA0
+#define GB_ADDRESS_IO           0xFF00
+#define GB_ADDRESS_HRAM         0xFF80
+#define GB_ADDRESS_IE           0xFFFF
 
-#define GB_SIZE_ROM_BANK 0x4000
-#define GB_SIZE_VRAM 0x2000
-#define GB_SIZE_EXTERNAL_RAM 0x2000
-#define GB_SIZE_WRAM_BANK0 0x1000
-#define GB_SIZE_WRAM_BANK1 0x1000
-#define GB_SIZE_MIRROR 0x2E00
-#define GB_SIZE_OAM 0x00A0
-#define GB_SIZE_UNREADABLE 0x0060
-#define GB_SIZE_IO 0x0080
-#define GB_SIZE_HRAM 0x007F
-#define GB_SIZE_IE 0x0001
+#define GB_SIZE_ROM_BANK        0x4000
+#define GB_SIZE_VRAM            0x2000
+#define GB_SIZE_EXTERNAL_RAM    0x2000
+#define GB_SIZE_WRAM_BANK0      0x1000
+#define GB_SIZE_WRAM_BANK1      0x1000
+#define GB_SIZE_MIRROR          0x2E00
+#define GB_SIZE_OAM             0x00A0
+#define GB_SIZE_UNREADABLE      0x0060
+#define GB_SIZE_IO              0x0080
+#define GB_SIZE_HRAM            0x007F
+#define GB_SIZE_IE              0x0001
 
 enum gb_memory_base_address
 {
@@ -37,8 +37,8 @@ enum gb_memory_base_address
    GB_MEM_EXTERNAL_RAM = 0xA,
    GB_MEM_WRAM_BANK0 = 0xC,
    GB_MEM_WRAM_BANK1 = 0xD,
-   GB_MEM_MIRROR = 0xE,
-   GB_MEM_F000 = 0xF
+   GB_MEM_BASE_E = 0xE,
+   GB_MEM_BASE_F = 0xF
 };
 
 enum gb_registers
@@ -107,8 +107,8 @@ enum gb_registers
    //Display registers
    REG_LCDC = 0xFF40,
    REG_STAT = 0xFF41,
-   REG_SY = 0xFF42,
-   REG_SX = 0xFF43,
+   REG_SCY = 0xFF42,
+   REG_SCX = 0xFF43,
    REG_LY = 0xFF44,
    REG_LYC = 0xFF45,
    REG_DMA = 0xFF46,
