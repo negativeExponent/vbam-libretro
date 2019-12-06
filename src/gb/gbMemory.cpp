@@ -1,12 +1,17 @@
-#include "gbMemory.h"
+#include <stdlib.h>
+
 #include "../System.h"
 #include "../common/Port.h"
+#include "NLS.h"
 #include "gb.h"
+#include "gbConstants.h"
 #include "gbGlobals.h"
-uint8_t gbDaysinMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-const uint8_t gbDisabledRam[8] = { 0x80, 0xff, 0xf0, 0x00, 0x30, 0xbf, 0xbf, 0xbf };
-extern int gbGBCColorType;
-extern gbRegister PC;
+#include "gbMemory.h"
+
+static uint8_t gbCheatingDevice = 0; // 1 = GS, 2 = GG
+static uint8_t gbRamFill = 0xff;
+static uint8_t gbDaysinMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static const uint8_t gbDisabledRam[8] = { 0x80, 0xff, 0xf0, 0x00, 0x30, 0xbf, 0xbf, 0xbf };
 
 rtcData_t rtcData = {
     0, // timer seconds
@@ -1618,4 +1623,467 @@ void memoryUpdateMapGS3()
     // GS can only change a half ROM bank
     gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
     gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
+}
+
+#define HEAD_ROMTYPE 0x147
+#define HEAD_ROMSIZE 0x148
+#define HEAD_RAMSIZE 0x149
+
+bool gbUpdateSizes()
+{
+   if (gbRom[HEAD_ROMSIZE] > 8)
+   {
+      systemMessage(MSG_UNSUPPORTED_ROM_SIZE,
+          N_("Unsupported rom size %02x"), gbRom[HEAD_ROMSIZE]);
+      return false;
+   }
+
+   if (gbRomSize < gbRomSizes[gbRom[HEAD_ROMSIZE]])
+   {
+      uint8_t* gbRomNew = (uint8_t*)realloc(gbRom, gbRomSizes[gbRom[HEAD_ROMSIZE]]);
+      if (!gbRomNew)
+      {
+         return false;
+      };
+      gbRom = gbRomNew;
+      for (int i = gbRomSize; i < gbRomSizes[gbRom[HEAD_ROMSIZE]]; i++)
+         gbRom[i] = 0x00; // Not sure if it's 0x00, 0xff or random data...
+   }
+   // (it's in the case a cart is 'lying' on its size.
+   else if ((gbRomSize > gbRomSizes[gbRom[HEAD_ROMSIZE]]) && (genericflashcardEnable))
+   {
+      gbRomSize = gbRomSize >> 16;
+      gbRom[HEAD_ROMSIZE] = 0;
+      if (gbRomSize)
+      {
+         while (!((gbRomSize & 1) || (gbRom[HEAD_ROMSIZE] == 7)))
+         {
+            gbRom[HEAD_ROMSIZE]++;
+            gbRomSize >>= 1;
+         }
+         gbRom[HEAD_ROMSIZE]++;
+      }
+      uint8_t* gbRomNew = (uint8_t*)realloc(gbRom, gbRomSizes[gbRom[HEAD_ROMSIZE]]);
+      if (!gbRomNew)
+      {
+         return false;
+      };
+      gbRom = gbRomNew;
+   }
+   gbRomSize = gbRomSizes[gbRom[HEAD_ROMSIZE]];
+   gbRomSizeMask = gbRomSizesMasks[gbRom[HEAD_ROMSIZE]];
+
+   // The 'genericflashcard' option allows some PD to work.
+   // However, the setting is dangerous (if you let in enabled
+   // and play a normal game, it might just break everything).
+   // That's why it is not saved in the emulator options.
+   // Also I added some checks in VBA to make sure your saves will not be
+   // overwritten if you wrongly enable this option for a game
+   // you already played (and vice-versa, ie. if you forgot to
+   // enable the option for a game you played with it enabled, like Shawu Story).
+   uint8_t ramsize = genericflashcardEnable ? 5 : gbRom[HEAD_RAMSIZE];
+   gbRom[HEAD_RAMSIZE] = ramsize;
+   gbCheatingDevice = 0;
+   if ((gbRom[2] == 0x6D) && (gbRom[5] == 0x47) && (gbRom[6] == 0x65) && (gbRom[7] == 0x6E) && (gbRom[8] == 0x69) && (gbRom[9] == 0x65) && (gbRom[0xA] == 0x28) && (gbRom[0xB] == 0x54))
+   {
+      gbCheatingDevice = 1; // GameGenie
+      for (int i = 0; i < 0x20; i++) // Cleans GG hardware registers
+         gbRom[0x4000 + i] = 0;
+   }
+   else if (((gbRom[0x104] == 0x44) && (gbRom[0x156] == 0xEA) && (gbRom[0x158] == 0x7F) && (gbRom[0x159] == 0xEA) && (gbRom[0x15B] == 0x7F)) || ((gbRom[0x165] == 0x3E) && (gbRom[0x166] == 0xD9) && (gbRom[0x16D] == 0xE1) && (gbRom[0x16E] == 0x7F)))
+      gbCheatingDevice = 2; // GameShark      
+
+   if (ramsize > 5)
+   {
+      systemMessage(MSG_UNSUPPORTED_RAM_SIZE,
+          N_("Unsupported ram size %02x"), gbRom[HEAD_RAMSIZE]);
+      return false;
+   }
+
+   gbRamSize = gbRamSizes[ramsize];
+   gbRamSizeMask = gbRamSizesMasks[ramsize];
+
+   gbRomType = gbRom[HEAD_ROMTYPE];
+   if (genericflashcardEnable)
+   {
+      /*if (gbRomType<2)
+      gbRomType =3;
+    else if ((gbRomType == 0xc) || (gbRomType == 0xf) || (gbRomType == 0x12) ||
+             (gbRomType == 0x16) || (gbRomType == 0x1a) || (gbRomType == 0x1d))
+      gbRomType++;
+    else if ((gbRomType == 0xb) || (gbRomType == 0x11) || (gbRomType == 0x15) ||
+             (gbRomType == 0x19) || (gbRomType == 0x1c))
+      gbRomType+=2;
+    else if ((gbRomType == 0x5) || (gbRomType == 0x6))
+      gbRomType = 0x1a;*/
+      gbRomType = 0x1b;
+   }
+   else if (gbCheatingDevice == 1)
+      gbRomType = 0x55;
+   else if (gbCheatingDevice == 2)
+      gbRomType = 0x56;
+
+   if (genericflashcardEnable || gbCheatingDevice)
+      gbRom[HEAD_ROMTYPE] = gbRomType;
+
+   mapperRam = false;
+   gbRTCPresent = false;
+   gbRumble = false;
+   gbBattery = false;
+
+   switch (gbRomType)
+   {
+   case 0x00:
+      mapperType = MBC1;
+      mapperRam = true;
+      break;
+
+   case 0x01:
+      mapperType = MBC1;
+      mapperRam = true;
+      break;
+
+   case 0x02:
+      mapperType = MBC1;
+      mapperRam = true;
+      break;
+
+   case 0x03:
+      mapperType = MBC1;
+      mapperRam = true;
+      gbBattery = true;
+      break;
+
+   case 0x05:
+      mapperType = MBC2;
+      gbRamSize = 0x200;
+      gbRamSizeMask = 0x1ff;
+      break;
+
+   case 0x06:
+      mapperType = MBC2;
+      gbBattery = true;
+      gbRamSize = 0x200;
+      gbRamSizeMask = 0x1ff;
+      break;
+
+   case 0x08:
+      mapperType = MBC1;
+      mapperRam = true;
+      break;
+
+   case 0x09:
+      mapperType = MBC1;
+      mapperRam = true;
+      gbBattery = true;
+      break;
+
+   case 0x0b:
+      mapperType = MMM01;
+      //mapperRam = true;
+      break;
+      
+   case 0x0c:
+      mapperType = MMM01; 
+      break;
+
+   case 0x0d:
+      mapperType = MMM01;
+      gbBattery = true;
+      break;
+
+   case 0x0f:
+      mapperType = MBC3;
+      mapperRam = true;
+      gbBattery = true;
+      gbRTCPresent = true;
+      break;
+
+   case 0x10:
+      mapperType = MBC3;
+      mapperRam = true;
+      gbBattery = true;
+      gbRTCPresent = true;
+      break;
+
+   case 0x11:
+      mapperType = MBC3;
+      mapperRam = true;
+      break;
+
+   case 0x12:
+      mapperType = MBC3;
+      mapperRam = true;
+      break;
+
+   case 0x13:
+      mapperType = MBC3;
+      mapperRam = true;
+      gbBattery = true;
+      break;
+
+   case 0x19:
+      mapperType = MBC5;
+      mapperRam = true;
+      break;
+
+   case 0x1a:
+      mapperType = MBC5;
+      mapperRam = true;
+      break;
+
+   case 0x1b:
+      mapperType = MBC5;
+      mapperRam = true;
+      break;
+
+   case 0x1c:
+      mapperType = MBC5;
+      mapperRam = true;
+      gbRumble = true;
+      break;
+
+   case 0x1d:
+      mapperType = MBC5;
+      mapperRam = true;
+      gbRumble = true;
+      break;
+
+   case 0x1e:
+      mapperType = MBC5;
+      mapperRam = true;
+      gbRumble = true;
+      break;
+
+   case 0x22:
+      mapperType = MBC7;
+      mapperRam = true;
+      gbBattery = true;
+      gbRamSize = 0x200;
+      gbRamSizeMask = 0x1ff;
+      break;
+
+   // GG (GameGenie)
+   case 0x55:
+      mapperType = GAMEGENIE;
+      break;
+
+   case 0x56:
+      // GS (GameShark)
+      mapperType = GAMESHARK;
+      break;
+
+   case 0xfc:
+      mapperType = MBC3;
+      mapperRam = true;
+      break;
+
+   case 0xfd:
+      // TAMA5
+      if (gbRam != NULL)
+      {
+         free(gbRam);
+         gbRam = NULL;
+      }
+
+      ramsize = 3;
+      gbRamSize = gbRamSizes[3];
+      gbRamSizeMask = gbRamSizesMasks[3];
+      gbRamFill = 0x0;
+
+      gbTAMA5ramSize = 0x100;
+
+      if (gbTAMA5ram == NULL) {
+         gbTAMA5ram = (uint8_t*)malloc(gbTAMA5ramSize);
+         if (!gbTAMA5ram) return false;
+      }
+      memset(gbTAMA5ram, 0x0, gbTAMA5ramSize);
+
+      mapperType = TAMA5;
+      mapperRam = true;
+      gbBattery = true;
+      gbRTCPresent = true;
+      break;
+
+   case 0xfe:
+      mapperType = HUC3;
+      mapperRam = true;
+      break;
+
+   case 0xff:
+      mapperType = HUC1;
+      gbBattery = true;
+      break;
+
+   default:
+      systemMessage(MSG_UNKNOWN_CARTRIDGE_TYPE,
+          N_("Unknown cartridge type %02x"), gbRomType);
+      return false;
+   }
+
+   if (gbRamSize)
+   {
+      gbRam = (uint8_t*)malloc(gbRamSize);
+      if (!gbRam) return false;
+      memset(gbRam, gbRamFill, gbRamSize);
+   }
+
+   if (!gbInit()) return false;
+
+   return true;
+}
+
+void mapperWrite(uint16_t address, uint8_t value)
+{
+    if (address >= 0xA000 && address < 0xC000)
+    {
+        switch (mapperType)
+        {
+        case MBC1:
+            mapperMBC1RAM(address, value);
+            return;
+        case MBC2:
+            mapperMBC2RAM(address, value);
+            return;
+        case MBC3:
+            mapperMBC3RAM(address, value);
+            return;
+        case MBC5:
+            mapperMBC5RAM(address, value);
+            return;
+        case MBC7:
+            mapperMBC7RAM(address, value);
+            return;
+        case MMM01:
+            mapperMMM01RAM(address, value);
+            return;
+        case GAMEGENIE:
+            return;
+        case GAMESHARK:
+            return;
+        case TAMA5:
+            mapperTAMA5RAM(address, value);
+            return;
+        case HUC1:
+            mapperHuC1RAM(address, value);
+            return;
+        case HUC3:
+            mapperHuC3RAM(address, value);
+            return;
+        default:
+            return;
+        }
+    }
+
+    switch (mapperType)
+    {
+    case MBC1:
+        mapperMBC1ROM(address, value);
+        return;
+    case MBC2:
+        mapperMBC2ROM(address, value);
+        return;
+    case MBC3:
+        mapperMBC3ROM(address, value);
+        return;
+    case MBC5:
+        mapperMBC5ROM(address, value);
+        return;
+    case MBC7:
+        mapperMBC7ROM(address, value);
+        return;
+    case MMM01:
+        mapperMMM01ROM(address, value);
+        return;
+    case GAMEGENIE:
+        mapperGGROM(address, value);
+        return;
+    case GAMESHARK:
+        mapperGS3ROM(address, value);
+        return;
+    case TAMA5:
+        return;
+    case HUC1:
+        mapperHuC1ROM(address, value);
+        return;
+    case HUC3:
+        mapperHuC3ROM(address, value);
+        return;
+    default:
+        return;
+    }
+}
+
+uint8_t mapperReadRAM(uint16_t address)
+{
+    switch (mapperType)
+    {
+    case MBC1:
+        return mapperMBC1ReadRAM(address);
+    case MBC2:
+        break;
+    case MBC3:
+        return mapperMBC3ReadRAM(address);
+    case MBC5:
+        return mapperMBC5ReadRAM(address);
+    case MBC7:
+        return mapperMBC7ReadRAM(address);
+    case MMM01:
+        break;
+    case GAMEGENIE:
+        break;
+    case GAMESHARK:
+        break;
+    case TAMA5:
+        return mapperTAMA5ReadRAM(address);
+    case HUC1:
+        break;
+    case HUC3:
+        return mapperHuC3ReadRAM(address);
+    default:
+        break;
+    }
+
+    return gbMemoryMap[address >> 12][address & 0x0fff];
+}
+
+void mapperUpdateMap()
+{
+    switch (mapperType)
+    {
+    case MBC1:
+        memoryUpdateMapMBC1();
+        return;
+    case MBC2:
+        memoryUpdateMapMBC2();
+        return;
+    case MBC3:
+        memoryUpdateMapMBC3();
+        return;
+    case MBC5:
+        memoryUpdateMapMBC5();
+        return;
+    case MBC7:
+        memoryUpdateMapMBC7();
+        return;
+    case MMM01:
+        memoryUpdateMapMMM01();
+        return;
+    case GAMEGENIE:
+        return;
+    case GAMESHARK:
+        memoryUpdateMapGS3();
+        return;
+    case TAMA5:
+        memoryUpdateMapTAMA5();
+        return;
+    case HUC1:
+        memoryUpdateMapHuC1();
+        return;
+    case HUC3:
+        memoryUpdateMapHuC3();
+        return;
+    default:
+        return;
+    }
 }

@@ -26,6 +26,7 @@ extern gbRegister AF, BC, DE, HL, SP, PC;
 extern uint16_t IFF;
 int gbDis(char*, uint16_t);
 
+bool gbInit();
 bool gbLoadRom(const char*);
 bool gbUpdateSizes();
 void gbEmulate(int);
@@ -54,10 +55,16 @@ bool gbLoadRomData(const char* data, unsigned size);
 void setColorizerHack(bool value);
 bool allowColorizerHack(void);
 
-extern int gbHardware;
+extern gbRegister PC;
 extern int gbRomType; // gets type from header 0x147
-extern int gbBattery; // enabled when gbRamSize != 0
-extern int gbRTCPresent;  // gbROM has RTC support
+extern int gbGBCColorType;
+extern int gbHardware;
+
+extern int mapperType; // MBC type
+extern bool mapperRam; // enabled when Ram read is allowed
+extern bool gbBattery; // enabled when gbRamSize != 0
+extern bool gbRTCPresent; // gbROM has RTC support
+extern bool gbRumble; // enabled if device rumble is supported
 
 extern struct EmulatedSystem GBSystem;
 

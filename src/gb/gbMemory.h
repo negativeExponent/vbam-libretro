@@ -147,6 +147,21 @@ enum gb_registers
    REG_UNK75 = 0xFF75
 };
 
+enum mapper_types {
+   ROM_ONLY = 0,
+   MBC1,
+   MBC2,
+   MBC3,
+   MBC5,
+   MBC7,
+   HUC1,
+   HUC3,
+   TAMA5,
+   MMM01,
+   GAMEGENIE,
+   GAMESHARK
+};
+
 struct rtcData_t
 {
    int mapperSeconds;
@@ -336,6 +351,11 @@ extern void memoryUpdateMapHuC3();
 extern void memoryUpdateMapTAMA5();
 extern void memoryUpdateMapMMM01();
 extern void memoryUpdateMapGS3();
+
+bool gbUpdateSizes();
+uint8_t mapperReadRAM(uint16_t address);
+void mapperWrite(uint16_t address, uint8_t value);
+void mapperUpdateMap();
 
 #define MBC3_RTC_DATA_SIZE sizeof(int) * 10 + sizeof(uint64_t)
 
