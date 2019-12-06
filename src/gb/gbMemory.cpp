@@ -8,6 +8,24 @@ const uint8_t gbDisabledRam[8] = { 0x80, 0xff, 0xf0, 0x00, 0x30, 0xbf, 0xbf, 0xb
 extern int gbGBCColorType;
 extern gbRegister PC;
 
+rtcData_t rtcData = {
+    0, // timer seconds
+    0, // timer minutes
+    0, // timer hours
+    0, // timer days
+    0, // timer months
+    0, // timer years
+    0, // timer control
+    0, // timer latched seconds
+    0, // timer latched minutes
+    0, // timer latched hours
+    0, // timer latched days
+    0, // timer latched months
+    0, // timer latched years
+    0, // timer latched control
+    {(time_t)-1} // last time
+};
+
 mapperMBC1 gbDataMBC1 = {
     0, // RAM enable
     1, // ROM bank
@@ -298,58 +316,47 @@ mapperMBC3 gbDataMBC3 = {
     0, // RAM address
     0, // timer clock latch
     0, // timer clock register
-    0, // timer seconds
-    0, // timer minutes
-    0, // timer hours
-    0, // timer days
-    0, // timer control
-    0, // timer latched seconds
-    0, // timer latched minutes
-    0, // timer latched hours
-    0, // timer latched days
-    0, // timer latched control
-    {0}  // last time
 };
 
 void memoryUpdateMBC3Clock()
 {
     time_t now = time(NULL);
-    time_t diff = now - gbDataMBC3.mapperLastTime;
+    time_t diff = now - rtcData.mapperLastTime;
     if (diff > 0) {
         // update the clock according to the last update time
-        gbDataMBC3.mapperSeconds += (int)(diff % 60);
-        if (gbDataMBC3.mapperSeconds > 59) {
-            gbDataMBC3.mapperSeconds -= 60;
-            gbDataMBC3.mapperMinutes++;
+        rtcData.mapperSeconds += (int)(diff % 60);
+        if (rtcData.mapperSeconds > 59) {
+            rtcData.mapperSeconds -= 60;
+            rtcData.mapperMinutes++;
         }
 
         diff /= 60;
 
-        gbDataMBC3.mapperMinutes += (int)(diff % 60);
-        if (gbDataMBC3.mapperMinutes > 59) {
-            gbDataMBC3.mapperMinutes -= 60;
-            gbDataMBC3.mapperHours++;
+        rtcData.mapperMinutes += (int)(diff % 60);
+        if (rtcData.mapperMinutes > 59) {
+            rtcData.mapperMinutes -= 60;
+            rtcData.mapperHours++;
         }
 
         diff /= 60;
 
-        gbDataMBC3.mapperHours += (int)(diff % 24);
-        if (gbDataMBC3.mapperHours > 23) {
-            gbDataMBC3.mapperHours -= 24;
-            gbDataMBC3.mapperDays++;
+        rtcData.mapperHours += (int)(diff % 24);
+        if (rtcData.mapperHours > 23) {
+            rtcData.mapperHours -= 24;
+            rtcData.mapperDays++;
         }
         diff /= 24;
 
-        gbDataMBC3.mapperDays += (int)(diff & 0xffffffff);
-        if (gbDataMBC3.mapperDays > 255) {
-            if (gbDataMBC3.mapperDays > 511) {
-                gbDataMBC3.mapperDays %= 512;
-                gbDataMBC3.mapperControl |= 0x80;
+        rtcData.mapperDays += (int)(diff & 0xffffffff);
+        if (rtcData.mapperDays > 255) {
+            if (rtcData.mapperDays > 511) {
+                rtcData.mapperDays %= 512;
+                rtcData.mapperControl |= 0x80;
             }
-            gbDataMBC3.mapperControl = (gbDataMBC3.mapperControl & 0xfe) | (gbDataMBC3.mapperDays > 255 ? 1 : 0);
+            rtcData.mapperControl = (rtcData.mapperControl & 0xfe) | (rtcData.mapperDays > 255 ? 1 : 0);
         }
     }
-    gbDataMBC3.mapperLastTime = now;
+    rtcData.mapperLastTime = now;
 }
 
 // MBC3 ROM write registers
@@ -400,11 +407,11 @@ void mapperMBC3ROM(uint16_t address, uint8_t value)
         if (gbRTCPresent) {
             if (gbDataMBC3.mapperClockLatch == 0 && value == 1) {
                 memoryUpdateMBC3Clock();
-                gbDataMBC3.mapperLSeconds = gbDataMBC3.mapperSeconds;
-                gbDataMBC3.mapperLMinutes = gbDataMBC3.mapperMinutes;
-                gbDataMBC3.mapperLHours = gbDataMBC3.mapperHours;
-                gbDataMBC3.mapperLDays = gbDataMBC3.mapperDays;
-                gbDataMBC3.mapperLControl = gbDataMBC3.mapperControl;
+                rtcData.mapperLSeconds = rtcData.mapperSeconds;
+                rtcData.mapperLMinutes = rtcData.mapperMinutes;
+                rtcData.mapperLHours = rtcData.mapperHours;
+                rtcData.mapperLDays = rtcData.mapperDays;
+                rtcData.mapperLControl = rtcData.mapperControl;
             }
             if (value == 0x00 || value == 0x01)
                 gbDataMBC3.mapperClockLatch = value;
@@ -423,25 +430,25 @@ void mapperMBC3RAM(uint16_t address, uint8_t value)
                 systemSaveUpdateCounter = SYSTEM_SAVE_UPDATED;
             }
         } else if (gbRTCPresent) {
-            time(&gbDataMBC3.mapperLastTime);
+            time(&rtcData.mapperLastTime);
             switch (gbDataMBC3.mapperClockRegister) {
             case 0x08:
-                gbDataMBC3.mapperSeconds = value;
+                rtcData.mapperSeconds = value;
                 break;
             case 0x09:
-                gbDataMBC3.mapperMinutes = value;
+                rtcData.mapperMinutes = value;
                 break;
             case 0x0a:
-                gbDataMBC3.mapperHours = value;
+                rtcData.mapperHours = value;
                 break;
             case 0x0b:
-                gbDataMBC3.mapperDays = value;
+                rtcData.mapperDays = value;
                 break;
             case 0x0c:
-                if (gbDataMBC3.mapperControl & 0x80)
-                    gbDataMBC3.mapperControl = 0x80 | value;
+                if (rtcData.mapperControl & 0x80)
+                    rtcData.mapperControl = 0x80 | value;
                 else
-                    gbDataMBC3.mapperControl = value;
+                    rtcData.mapperControl = value;
                 break;
             }
         }
@@ -457,19 +464,19 @@ uint8_t mapperMBC3ReadRAM(uint16_t address)
         } else if (gbRTCPresent) {
             switch (gbDataMBC3.mapperClockRegister) {
             case 0x08:
-                return gbDataMBC3.mapperLSeconds;
+                return rtcData.mapperLSeconds;
                 break;
             case 0x09:
-                return gbDataMBC3.mapperLMinutes;
+                return rtcData.mapperLMinutes;
                 break;
             case 0x0a:
-                return gbDataMBC3.mapperLHours;
+                return rtcData.mapperLHours;
                 break;
             case 0x0b:
-                return gbDataMBC3.mapperLDays;
+                return rtcData.mapperLDays;
                 break;
             case 0x0c:
-                return gbDataMBC3.mapperLControl;
+                return rtcData.mapperLControl;
             }
         }
     }
@@ -1164,68 +1171,53 @@ mapperTAMA5 gbDataTAMA5 = {
     0, // register
     0, // timer clock latch
     0, // timer clock register
-    0, // timer seconds
-    0, // timer minutes
-    0, // timer hours
-    0, // timer days
-    0, // timer months
-    0, // timer years
-    0, // timer control
-    0, // timer latched seconds
-    0, // timer latched minutes
-    0, // timer latched hours
-    0, // timer latched days
-    0, // timer latched months
-    0, // timer latched years
-    0, // timer latched control
-    {(time_t)-1} // last time
 };
 
 void memoryUpdateTAMA5Clock()
 {
-    if ((gbDataTAMA5.mapperYears & 3) == 0)
+    if ((rtcData.mapperYears & 3) == 0)
         gbDaysinMonth[1] = 29;
     else
         gbDaysinMonth[1] = 28;
 
     time_t now = time(NULL);
-    time_t diff = now - gbDataTAMA5.mapperLastTime;
+    time_t diff = now - rtcData.mapperLastTime;
     if (diff > 0) {
         // update the clock according to the last update time
-        gbDataTAMA5.mapperSeconds += (int)(diff % 60);
-        if (gbDataTAMA5.mapperSeconds > 59) {
-            gbDataTAMA5.mapperSeconds -= 60;
-            gbDataTAMA5.mapperMinutes++;
+        rtcData.mapperSeconds += (int)(diff % 60);
+        if (rtcData.mapperSeconds > 59) {
+            rtcData.mapperSeconds -= 60;
+            rtcData.mapperMinutes++;
         }
 
         diff /= 60;
 
-        gbDataTAMA5.mapperMinutes += (int)(diff % 60);
-        if (gbDataTAMA5.mapperMinutes > 59) {
-            gbDataTAMA5.mapperMinutes -= 60;
-            gbDataTAMA5.mapperHours++;
+        rtcData.mapperMinutes += (int)(diff % 60);
+        if (rtcData.mapperMinutes > 59) {
+            rtcData.mapperMinutes -= 60;
+            rtcData.mapperHours++;
         }
 
         diff /= 60;
 
-        gbDataTAMA5.mapperHours += (int)(diff % 24);
+        rtcData.mapperHours += (int)(diff % 24);
         diff /= 24;
-        if (gbDataTAMA5.mapperHours > 23) {
-            gbDataTAMA5.mapperHours -= 24;
+        if (rtcData.mapperHours > 23) {
+            rtcData.mapperHours -= 24;
             diff++;
         }
 
         time_t days = diff;
         while (days) {
-            gbDataTAMA5.mapperDays++;
+            rtcData.mapperDays++;
             days--;
-            if (gbDataTAMA5.mapperDays > gbDaysinMonth[gbDataTAMA5.mapperMonths - 1]) {
-                gbDataTAMA5.mapperDays = 1;
-                gbDataTAMA5.mapperMonths++;
-                if (gbDataTAMA5.mapperMonths > 12) {
-                    gbDataTAMA5.mapperMonths = 1;
-                    gbDataTAMA5.mapperYears++;
-                    if ((gbDataTAMA5.mapperYears & 3) == 0)
+            if (rtcData.mapperDays > gbDaysinMonth[rtcData.mapperMonths - 1]) {
+                rtcData.mapperDays = 1;
+                rtcData.mapperMonths++;
+                if (rtcData.mapperMonths > 12) {
+                    rtcData.mapperMonths = 1;
+                    rtcData.mapperYears++;
+                    if ((rtcData.mapperYears & 3) == 0)
                         gbDaysinMonth[1] = 29;
                     else
                         gbDaysinMonth[1] = 28;
@@ -1233,7 +1225,7 @@ void memoryUpdateTAMA5Clock()
             }
         }
     }
-    gbDataTAMA5.mapperLastTime = now;
+    rtcData.mapperLastTime = now;
 }
 
 // TAMA5 RAM write
@@ -1282,22 +1274,22 @@ void mapperTAMA5RAM(uint16_t address, uint8_t value)
                     {
                         switch (data & 0xf) {
                         case 0x7:
-                            gbDataTAMA5.mapperDays = ((gbDataTAMA5.mapperDays) / 10) * 10 + (data >> 4);
+                            rtcData.mapperDays = ((rtcData.mapperDays) / 10) * 10 + (data >> 4);
                             break;
                         case 0x8:
-                            gbDataTAMA5.mapperDays = (gbDataTAMA5.mapperDays % 10) + (data >> 4) * 10;
+                            rtcData.mapperDays = (rtcData.mapperDays % 10) + (data >> 4) * 10;
                             break;
                         case 0x9:
-                            gbDataTAMA5.mapperMonths = ((gbDataTAMA5.mapperMonths) / 10) * 10 + (data >> 4);
+                            rtcData.mapperMonths = ((rtcData.mapperMonths) / 10) * 10 + (data >> 4);
                             break;
                         case 0xa:
-                            gbDataTAMA5.mapperMonths = (gbDataTAMA5.mapperMonths % 10) + (data >> 4) * 10;
+                            rtcData.mapperMonths = (rtcData.mapperMonths % 10) + (data >> 4) * 10;
                             break;
                         case 0xb:
-                            gbDataTAMA5.mapperYears = ((gbDataTAMA5.mapperYears) % 1000) + (data >> 4) * 1000;
+                            rtcData.mapperYears = ((rtcData.mapperYears) % 1000) + (data >> 4) * 1000;
                             break;
                         case 0xc:
-                            gbDataTAMA5.mapperYears = (gbDataTAMA5.mapperYears % 100) + (gbDataTAMA5.mapperYears / 1000) * 1000 + (data >> 4) * 100;
+                            rtcData.mapperYears = (rtcData.mapperYears % 100) + (rtcData.mapperYears / 1000) * 1000 + (data >> 4) * 100;
                             break;
                         default:
                             break;
@@ -1305,25 +1297,25 @@ void mapperTAMA5RAM(uint16_t address, uint8_t value)
                     } else if (gbDataTAMA5.mapperRamByteSelect == 0x18) // Timer stuff again
                     {
                         memoryUpdateTAMA5Clock();
-                        gbDataTAMA5.mapperLSeconds = gbDataTAMA5.mapperSeconds;
-                        gbDataTAMA5.mapperLMinutes = gbDataTAMA5.mapperMinutes;
-                        gbDataTAMA5.mapperLHours = gbDataTAMA5.mapperHours;
-                        gbDataTAMA5.mapperLDays = gbDataTAMA5.mapperDays;
-                        gbDataTAMA5.mapperLMonths = gbDataTAMA5.mapperMonths;
-                        gbDataTAMA5.mapperLYears = gbDataTAMA5.mapperYears;
-                        gbDataTAMA5.mapperLControl = gbDataTAMA5.mapperControl;
+                        rtcData.mapperLSeconds = rtcData.mapperSeconds;
+                        rtcData.mapperLMinutes = rtcData.mapperMinutes;
+                        rtcData.mapperLHours = rtcData.mapperHours;
+                        rtcData.mapperLDays = rtcData.mapperDays;
+                        rtcData.mapperLMonths = rtcData.mapperMonths;
+                        rtcData.mapperLYears = rtcData.mapperYears;
+                        rtcData.mapperLControl = rtcData.mapperControl;
 
-                        int seconds = (gbDataTAMA5.mapperLSeconds / 10) * 16 + gbDataTAMA5.mapperLSeconds % 10;
-                        int secondsL = (gbDataTAMA5.mapperLSeconds % 10);
-                        int secondsH = (gbDataTAMA5.mapperLSeconds / 10);
-                        int minutes = (gbDataTAMA5.mapperLMinutes / 10) * 16 + gbDataTAMA5.mapperLMinutes % 10;
-                        int hours = (gbDataTAMA5.mapperLHours / 10) * 16 + gbDataTAMA5.mapperLHours % 10;
-                        int DaysL = gbDataTAMA5.mapperLDays % 10;
-                        int DaysH = gbDataTAMA5.mapperLDays / 10;
-                        int MonthsL = gbDataTAMA5.mapperLMonths % 10;
-                        int MonthsH = gbDataTAMA5.mapperLMonths / 10;
-                        int Years3 = (gbDataTAMA5.mapperLYears / 100) % 10;
-                        int Years4 = (gbDataTAMA5.mapperLYears / 1000);
+                        int seconds = (rtcData.mapperLSeconds / 10) * 16 + rtcData.mapperLSeconds % 10;
+                        int secondsL = (rtcData.mapperLSeconds % 10);
+                        int secondsH = (rtcData.mapperLSeconds / 10);
+                        int minutes = (rtcData.mapperLMinutes / 10) * 16 + rtcData.mapperLMinutes % 10;
+                        int hours = (rtcData.mapperLHours / 10) * 16 + rtcData.mapperLHours % 10;
+                        int DaysL = rtcData.mapperLDays % 10;
+                        int DaysH = rtcData.mapperLDays / 10;
+                        int MonthsL = rtcData.mapperLMonths % 10;
+                        int MonthsH = rtcData.mapperLMonths / 10;
+                        int Years3 = (rtcData.mapperLYears / 100) % 10;
+                        int Years4 = (rtcData.mapperLYears / 1000);
 
                         switch (data & 0x0f) {
                         // I guess cases 0 and 1 are used for secondsL and secondsH
@@ -1363,17 +1355,17 @@ void mapperTAMA5RAM(uint16_t address, uint8_t value)
                         gbTAMA5ram[0x84] = DaysH * 16 + DaysL; // incorrect ? (not used by the game) ?
                         gbTAMA5ram[0x94] = MonthsH * 16 + MonthsL; // incorrect ? (not used by the game) ?
 
-                        time(&gbDataTAMA5.mapperLastTime);
+                        time(&rtcData.mapperLastTime);
 
                         gbMemoryMap[0xa][0] = 1;
                     } else if (gbDataTAMA5.mapperRamByteSelect == 0x28) // Timer stuff again
                     {
                         if ((data & 0xf) == 0xb)
-                            gbDataTAMA5.mapperYears = ((gbDataTAMA5.mapperYears >> 2) << 2) + (data & 3);
+                            rtcData.mapperYears = ((rtcData.mapperYears >> 2) << 2) + (data & 3);
                     } else if (gbDataTAMA5.mapperRamByteSelect == 0x44) {
-                        gbDataTAMA5.mapperMinutes = (data / 16) * 10 + data % 16;
+                        rtcData.mapperMinutes = (data / 16) * 10 + data % 16;
                     } else if (gbDataTAMA5.mapperRamByteSelect == 0x54) {
-                        gbDataTAMA5.mapperHours = (data / 16) * 10 + data % 16;
+                        rtcData.mapperHours = (data / 16) * 10 + data % 16;
                     } else {
                         gbTAMA5ram[gbDataTAMA5.mapperRamByteSelect] = data;
                     }

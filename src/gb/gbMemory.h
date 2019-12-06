@@ -147,6 +147,28 @@ enum gb_registers
    REG_UNK75 = 0xFF75
 };
 
+struct rtcData_t
+{
+   int mapperSeconds;
+   int mapperMinutes;
+   int mapperHours;
+   int mapperDays;
+   int mapperMonths;
+   int mapperYears;
+   int mapperControl;
+   int mapperLSeconds;
+   int mapperLMinutes;
+   int mapperLHours;
+   int mapperLDays;
+   int mapperLMonths;
+   int mapperLYears;
+   int mapperLControl;
+   union {
+      time_t mapperLastTime;
+      int64_t _time_pad; /* so that 32bit and 64bit saves are compatible */
+   };
+};
+
 struct mapperMBC1
 {
    int mapperRAMEnable;
@@ -172,20 +194,6 @@ struct mapperMBC3
    int mapperRAMAddress;
    int mapperClockLatch;
    int mapperClockRegister;
-   int mapperSeconds;
-   int mapperMinutes;
-   int mapperHours;
-   int mapperDays;
-   int mapperControl;
-   int mapperLSeconds;
-   int mapperLMinutes;
-   int mapperLHours;
-   int mapperLDays;
-   int mapperLControl;
-   union {
-      time_t mapperLastTime;
-      uint64_t _time_pad; /* so that 32bit and 64bit saves are compatible */
-   };
 };
 
 struct mapperMBC5
@@ -258,24 +266,6 @@ struct mapperTAMA5
    int mapperRegister;
    int mapperClockLatch;
    int mapperClockRegister;
-   int mapperSeconds;
-   int mapperMinutes;
-   int mapperHours;
-   int mapperDays;
-   int mapperMonths;
-   int mapperYears;
-   int mapperControl;
-   int mapperLSeconds;
-   int mapperLMinutes;
-   int mapperLHours;
-   int mapperLDays;
-   int mapperLMonths;
-   int mapperLYears;
-   int mapperLControl;
-   union {
-      time_t mapperLastTime;
-      uint64_t _time_pad; /* so that 32bit and 64bit saves are compatible */
-   };
 };
 
 struct mapperMMM01
@@ -303,6 +293,8 @@ extern mapperHuC3 gbDataHuC3;
 extern mapperTAMA5 gbDataTAMA5;
 extern mapperMMM01 gbDataMMM01;
 extern mapperGS3 gbDataGS3;
+extern rtcData_t rtcData;
+
 
 void mapperMBC1ROM(uint16_t, uint8_t);
 void mapperMBC1RAM(uint16_t, uint8_t);
