@@ -421,8 +421,16 @@ static void gbWriteIO(uint16_t address, uint8_t value)
       }
 
       gbSerialBits = 0;
-      return;
+#else // NO_LINK
+      if ((value & 1))
+      {
+         gbMemory[REG_SB] = 0xff;
+         gbMemory[REG_SC] &= 0x7f;
+         gbSerialOn        = 0;
+         gbMemory[IF_FLAG] = register_IF |= 8;
+      }
 #endif // NO_LINK
+      return;
    }
 
    case 0x04:

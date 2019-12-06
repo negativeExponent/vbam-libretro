@@ -3,6 +3,15 @@
 
 #include "common/Types.h"
 
+// hard-coded defines
+#ifndef NO_LINK
+#define NO_LINK
+#endif
+
+#ifndef C_CORE
+#define C_CORE
+#endif
+
 #define winlog log
 
 class SoundDriver;
