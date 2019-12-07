@@ -154,9 +154,6 @@ static void set_gbPalette(void)
    }
 }
 
-#define GB_RTC_DATA_PTR (rtcData_t*)&rtcData
-#define GB_RTC_DATA_SIZE (sizeof(int) * 14 + sizeof(int64_t))
-
 static void gbInitRTC(void)
 {
    struct tm *lt;
@@ -241,6 +238,13 @@ static void SetGBBorder(unsigned val)
       environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &avinfo);
 }
 
+#define GB_RTC_DATA_PTR (rtcData_t*)&rtcData
+#define GB_RTC_DATA_SIZE (sizeof(int) * 14 + sizeof(int64_t))
+
+// this should probably be remapped to gbRam instead for consistency
+#define GB_MBC7_SAVE_PTR (uint8_t*)&gbMemory[GB_ADDRESS_EXTERNAL_RAM]
+#define GB_MBC7_SAVE_SIZE 256
+
 void *retro_get_memory_data(unsigned id)
 {
    void *data = NULL;
@@ -256,12 +260,6 @@ void *retro_get_memory_data(unsigned id)
          else if ((saveType == GBA_SAVE_SRAM) | (saveType == GBA_SAVE_FLASH))
             data = flashSaveMemory;
          break;
-      case RETRO_MEMORY_SYSTEM_RAM:
-         data = workRAM;
-         break;
-      case RETRO_MEMORY_VIDEO_RAM:
-         data = vram;
-         break;
       }
       break;
 
@@ -270,13 +268,12 @@ void *retro_get_memory_data(unsigned id)
       {
       case RETRO_MEMORY_SAVE_RAM:
          if (gbBattery)
-            data = gbRam;
-         break;
-      case RETRO_MEMORY_SYSTEM_RAM:
-         data = (gbCgbMode ? gbWram : (gbMemory + 0xC000));
-         break;
-      case RETRO_MEMORY_VIDEO_RAM:
-         data = (gbCgbMode ? gbVram : (gbMemory + 0x8000));
+         {
+            if (mapperType == MBC7)
+               data = GB_MBC7_SAVE_PTR;
+            else
+               data = gbRam;
+         }
          break;
       case RETRO_MEMORY_RTC:
          if (gbRTCPresent)
@@ -307,12 +304,6 @@ size_t retro_get_memory_size(unsigned id)
          else if (saveType == GBA_SAVE_SRAM)
             size = SIZE_SRAM;
          break;
-      case RETRO_MEMORY_SYSTEM_RAM:
-         size = SIZE_WRAM;
-         break;
-      case RETRO_MEMORY_VIDEO_RAM:
-         size = SIZE_VRAM - 0x2000; // usuable vram is only 0x18000
-         break;
       }
       break;
 
@@ -321,13 +312,12 @@ size_t retro_get_memory_size(unsigned id)
       {
       case RETRO_MEMORY_SAVE_RAM:
          if (gbBattery)
-            size = gbRamSize;
-         break;
-      case RETRO_MEMORY_SYSTEM_RAM:
-         size = gbCgbMode ? 0x8000 : 0x2000;
-         break;
-      case RETRO_MEMORY_VIDEO_RAM:
-         size = gbCgbMode ? 0x4000 : 0x2000;
+         {
+            if (mapperType == MBC7)
+               size = GB_MBC7_SAVE_SIZE;
+            else
+               size = gbRamSize;
+         }
          break;
       case RETRO_MEMORY_RTC:
          if (gbRTCPresent)
