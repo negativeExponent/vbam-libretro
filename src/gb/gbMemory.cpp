@@ -13,6 +13,43 @@ static uint8_t gbRamFill = 0xff;
 static uint8_t gbDaysinMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 static const uint8_t gbDisabledRam[8] = { 0x80, 0xff, 0xf0, 0x00, 0x30, 0xbf, 0xbf, 0xbf };
 
+static void MBCswitchROMBanks(int address)
+{
+    // Bank 0
+    gbMemoryMap[GB_MEM_CART_BANK0 + 0] = &gbRom[address + 0x0000];
+    gbMemoryMap[GB_MEM_CART_BANK0 + 1] = &gbRom[address + 0x1000];
+    gbMemoryMap[GB_MEM_CART_BANK0 + 2] = &gbRom[address + 0x2000];
+    gbMemoryMap[GB_MEM_CART_BANK0 + 3] = &gbRom[address + 0x3000];
+
+    // Bank 1
+    gbMemoryMap[GB_MEM_CART_BANK1 + 0] = &gbRom[address + 0x4000];
+    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[address + 0x5000];
+    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[address + 0x6000];
+    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[address + 0x7000];
+}
+
+static void MBCswitchROMBank0(int address)
+{
+    gbMemoryMap[GB_MEM_CART_BANK0 + 0] = &gbRom[address + 0x0000];
+    gbMemoryMap[GB_MEM_CART_BANK0 + 1] = &gbRom[address + 0x1000];
+    gbMemoryMap[GB_MEM_CART_BANK0 + 2] = &gbRom[address + 0x2000];
+    gbMemoryMap[GB_MEM_CART_BANK0 + 3] = &gbRom[address + 0x3000];
+}
+
+static void MBCswitchROMBank1(int address)
+{
+    gbMemoryMap[GB_MEM_CART_BANK1 + 0] = &gbRom[address + 0x0000];
+    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[address + 0x1000];
+    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[address + 0x2000];
+    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[address + 0x3000];
+}
+
+static void MBCswitchRAMBank(int address)
+{
+    gbMemoryMap[GB_MEM_EXTERNAL_RAM + 0] = &gbRam[address + 0x0000];
+    gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[address + 0x1000];
+}
+
 rtcData_t rtcData = {
     0, // timer seconds
     0, // timer minutes
@@ -73,10 +110,7 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
 
         tmpAddress &= gbRomSizeMask;
         gbDataMBC1.mapperROMBank = value;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
         break;
     case 0x4000: // RAM bank select
         if (gbDataMBC1.mapperMemoryModel == 1) {
@@ -85,14 +119,7 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
                     gbDataMBC1.mapperROMHighAddress = value & 0x03;
                     tmpAddress = (gbDataMBC1.mapperROMHighAddress) << 18;
                     tmpAddress &= gbRomSizeMask;
-                    gbMemoryMap[GB_MEM_CART_BANK0] = &gbRom[tmpAddress];
-                    gbMemoryMap[GB_MEM_CART_BANK0 + 1] = &gbRom[tmpAddress + 0x1000];
-                    gbMemoryMap[GB_MEM_CART_BANK0 + 2] = &gbRom[tmpAddress + 0x2000];
-                    gbMemoryMap[GB_MEM_CART_BANK0 + 3] = &gbRom[tmpAddress + 0x3000];
-                    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress + 0x4000];
-                    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x5000];
-                    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x6000];
-                    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x7000];
+                    MBCswitchROMBanks(tmpAddress);
                 } else
                     gbDataMBC1.mapperRomBank0Remapping = 0;
             }
@@ -103,8 +130,7 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
             tmpAddress = value << 13;
             tmpAddress &= gbRamSizeMask;
             if (gbRamSize) {
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+                MBCswitchRAMBank(tmpAddress);
             }
             gbDataMBC1.mapperRAMBank = value;
             gbDataMBC1.mapperRAMAddress = tmpAddress;
@@ -117,13 +143,9 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
             tmpAddress = gbDataMBC1.mapperROMBank << 14;
             tmpAddress |= (gbDataMBC1.mapperROMHighAddress) << 19;
             tmpAddress &= gbRomSizeMask;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
             if (gbRamSize) {
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[0];
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[0x1000];
+                MBCswitchRAMBank(0);
             }
 
             gbDataMBC1.mapperRAMBank = 0;
@@ -139,8 +161,7 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
             tmpAddress = value << 13;
             tmpAddress &= gbRamSizeMask;
             if (gbRamSize) {
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[gbDataMBC1.mapperRAMAddress];
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[gbDataMBC1.mapperRAMAddress + 0x1000];
+                MBCswitchRAMBank(gbDataMBC1.mapperRAMAddress);
                 gbDataMBC1.mapperRomBank0Remapping = 0;
             } else
                 gbDataMBC1.mapperRomBank0Remapping |= 2;
@@ -151,10 +172,7 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
             tmpAddress = gbDataMBC1.mapperROMBank << 14;
 
             tmpAddress &= gbRomSizeMask;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
 
         } else {
             // 16/8, set the high address
@@ -162,13 +180,9 @@ void mapperMBC1ROM(uint16_t address, uint8_t value)
             tmpAddress = gbDataMBC1.mapperROMBank << 14;
             tmpAddress |= (gbDataMBC1.mapperROMHighAddress) << 19;
             tmpAddress &= gbRomSizeMask;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
             if (gbRamSize) {
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[0];
-                gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[0x1000];
+                MBCswitchRAMBank(0);
             }
         }
         break;
@@ -220,16 +234,10 @@ void memoryUpdateMapMBC1()
     if (gbDataMBC1.mapperRomBank0Remapping == 3) {
         tmpAddress = (gbDataMBC1.mapperROMHighAddress & 3) << 18;
         tmpAddress &= gbRomSizeMask;
-        gbMemoryMap[GB_MEM_CART_BANK0] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK0 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK0 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK0 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank0(tmpAddress);
 
         tmpAddress |= (gbDataMBC1.mapperROMBank & 0xf) << 14;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
     } else {
         if (gbDataMBC1.mapperMemoryModel == 0) {
             // model is 16/8, so we have a high address in use
@@ -237,19 +245,14 @@ void memoryUpdateMapMBC1()
         }
 
         tmpAddress &= gbRomSizeMask;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
     }
 
     if (gbRamSize) {
         if (gbDataMBC1.mapperMemoryModel == 1) {
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[gbDataMBC1.mapperRAMAddress];
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[gbDataMBC1.mapperRAMAddress + 0x1000];
+            MBCswitchRAMBank(gbDataMBC1.mapperRAMAddress);
         } else {
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[0];
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[0x1000];
+            MBCswitchRAMBank(0);
         }
     }
 }
@@ -281,10 +284,7 @@ void mapperMBC2ROM(uint16_t address, uint8_t value)
 
                 tmpAddress &= gbRomSizeMask;
 
-                gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-                gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-                gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-                gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+                MBCswitchROMBank1(tmpAddress);
             }
         }
         break;
@@ -308,10 +308,7 @@ void memoryUpdateMapMBC2()
 
     tmpAddress &= gbRomSizeMask;
 
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 }
 
 mapperMBC3 gbDataMBC3 = {
@@ -384,10 +381,7 @@ void mapperMBC3ROM(uint16_t address, uint8_t value)
 
         tmpAddress &= gbRomSizeMask;
         gbDataMBC3.mapperROMBank = value;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
 
         break;
     case 0x4000: // RAM bank select
@@ -396,8 +390,7 @@ void mapperMBC3ROM(uint16_t address, uint8_t value)
                 break;
             tmpAddress = value << 13;
             tmpAddress &= gbRamSizeMask;
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+            MBCswitchRAMBank(tmpAddress);
             gbDataMBC3.mapperRAMBank = value;
             gbDataMBC3.mapperRAMAddress = tmpAddress;
         } else {
@@ -511,16 +504,12 @@ void memoryUpdateMapMBC3()
 
     tmpAddress &= gbRomSizeMask;
 
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 
     if (gbDataMBC3.mapperRAMBank >= 0 && gbRamSize) {
         tmpAddress = gbDataMBC3.mapperRAMBank << 13;
         tmpAddress &= gbRamSizeMask;
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+        MBCswitchRAMBank(tmpAddress);
     }
 }
 
@@ -553,10 +542,7 @@ void mapperMBC5ROM(uint16_t address, uint8_t value)
 
             tmpAddress &= gbRomSizeMask;
             gbDataMBC5.mapperROMBank = value;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
 
         } else {
             value = value & 1;
@@ -567,10 +553,7 @@ void mapperMBC5ROM(uint16_t address, uint8_t value)
 
             tmpAddress &= gbRomSizeMask;
             gbDataMBC5.mapperROMHighAddress = value;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
         }
         break;
     case 0x4000: // RAM bank select
@@ -584,8 +567,7 @@ void mapperMBC5ROM(uint16_t address, uint8_t value)
         tmpAddress = value << 13;
         tmpAddress &= gbRamSizeMask;
         if (gbRamSize) {
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+            MBCswitchRAMBank(tmpAddress);
 
             gbDataMBC5.mapperRAMBank = value;
             gbDataMBC5.mapperRAMAddress = tmpAddress;
@@ -636,16 +618,12 @@ void memoryUpdateMapMBC5()
     int tmpAddress = (gbDataMBC5.mapperROMBank << 14) | (gbDataMBC5.mapperROMHighAddress << 22);
 
     tmpAddress &= gbRomSizeMask;
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 
     if (gbRamSize) {
         tmpAddress = gbDataMBC5.mapperRAMBank << 13;
         tmpAddress &= gbRamSizeMask;
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+        MBCswitchRAMBank(tmpAddress);
     }
 }
 
@@ -686,10 +664,7 @@ void mapperMBC7ROM(uint16_t address, uint8_t value)
 
         tmpAddress &= gbRomSizeMask;
         gbDataMBC7.mapperROMBank = value;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
         break;
     case 0x4000: // RAM bank select/enable
         if (value < 8) {
@@ -900,10 +875,7 @@ void memoryUpdateMapMBC7()
     int tmpAddress = (gbDataMBC7.mapperROMBank << 14);
 
     tmpAddress &= gbRomSizeMask;
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 }
 
 mapperHuC1 gbDataHuC1 = {
@@ -935,10 +907,7 @@ void mapperHuC1ROM(uint16_t address, uint8_t value)
 
         tmpAddress &= gbRomSizeMask;
         gbDataHuC1.mapperROMBank = value;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
         break;
     case 0x4000: // RAM bank select
         if (gbDataHuC1.mapperMemoryModel == 1) {
@@ -948,8 +917,7 @@ void mapperHuC1ROM(uint16_t address, uint8_t value)
                 break;
             tmpAddress = value << 13;
             tmpAddress &= gbRamSizeMask;
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+            MBCswitchRAMBank(tmpAddress);
             gbDataHuC1.mapperRAMBank = value;
             gbDataHuC1.mapperRAMAddress = tmpAddress;
         } else {
@@ -958,10 +926,7 @@ void mapperHuC1ROM(uint16_t address, uint8_t value)
             tmpAddress = gbDataHuC1.mapperROMBank << 14;
             tmpAddress |= (gbDataHuC1.mapperROMHighAddress) << 19;
             tmpAddress &= gbRomSizeMask;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
         }
         break;
     case 0x6000: // memory model select
@@ -987,16 +952,12 @@ void memoryUpdateMapHuC1()
 
     tmpAddress &= gbRomSizeMask;
 
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 
     if (gbRamSize) {
         tmpAddress = gbDataHuC1.mapperRAMBank << 13;
         tmpAddress &= gbRamSizeMask;
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+        MBCswitchRAMBank(tmpAddress);
     }
 }
 
@@ -1041,10 +1002,7 @@ void mapperHuC3ROM(uint16_t address, uint8_t value)
 
         tmpAddress &= gbRomSizeMask;
         gbDataHuC3.mapperROMBank = value;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
         break;
     case 0x4000: // RAM bank select
         value = value & 0x03;
@@ -1052,8 +1010,7 @@ void mapperHuC3ROM(uint16_t address, uint8_t value)
             break;
         tmpAddress = value << 13;
         tmpAddress &= gbRamSizeMask;
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+        MBCswitchRAMBank(tmpAddress);
         gbDataHuC3.mapperRAMBank = value;
         gbDataHuC3.mapperRAMAddress = tmpAddress;
         break;
@@ -1132,16 +1089,12 @@ void memoryUpdateMapHuC3()
     int tmpAddress = gbDataHuC3.mapperROMBank << 14;
 
     tmpAddress &= gbRomSizeMask;
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 
     if (gbRamSize) {
         tmpAddress = gbDataHuC3.mapperRAMBank << 13;
         tmpAddress &= gbRamSizeMask;
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+        MBCswitchRAMBank(tmpAddress);
     }
 }
 
@@ -1254,10 +1207,7 @@ void mapperTAMA5RAM(uint16_t address, uint8_t value)
                 int tmpAddress = (gbDataTAMA5.mapperROMBank << 14);
 
                 tmpAddress &= gbRomSizeMask;
-                gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-                gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-                gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-                gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+                MBCswitchROMBank1(tmpAddress);
 
                 gbDataTAMA5.mapperCommands[0x0f] = 0;
             } else if ((gbDataTAMA5.mapperCommandNumber & 0xe) == 4) {
@@ -1432,16 +1382,12 @@ void memoryUpdateMapTAMA5()
     int tmpAddress = (gbDataTAMA5.mapperROMBank << 14);
 
     tmpAddress &= gbRomSizeMask;
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 
     if (gbRamSize) {
         tmpAddress = 0 << 13;
         tmpAddress &= gbRamSizeMask;
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+        MBCswitchRAMBank(tmpAddress);
     }
 }
 
@@ -1483,10 +1429,7 @@ void mapperMMM01ROM(uint16_t address, uint8_t value)
 
         tmpAddress &= gbRomSizeMask;
         gbDataMMM01.mapperROMBank = value;
-        gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-        gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+        MBCswitchROMBank1(tmpAddress);
         break;
     case 0x4000: // RAM bank select
         if (gbDataMMM01.mapperMemoryModel == 1) {
@@ -1496,8 +1439,7 @@ void mapperMMM01ROM(uint16_t address, uint8_t value)
                 break;
             tmpAddress = value << 13;
             tmpAddress &= gbRamSizeMask;
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[tmpAddress];
-            gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[tmpAddress + 0x1000];
+            MBCswitchRAMBank(tmpAddress);
             gbDataMMM01.mapperRAMBank = value;
             gbDataMMM01.mapperRAMAddress = tmpAddress;
         } else {
@@ -1506,18 +1448,12 @@ void mapperMMM01ROM(uint16_t address, uint8_t value)
             tmpAddress = gbDataMMM01.mapperROMBank << 14;
             tmpAddress |= (gbDataMMM01.mapperROMHighAddress) << 19;
             tmpAddress &= gbRomSizeMask;
-            gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank1(tmpAddress);
 
             gbDataMMM01.mapperRomBank0Remapping = ((value << 1) | (value & 0x40 ? 1 : 0)) & 0xff;
             tmpAddress = gbDataMMM01.mapperRomBank0Remapping << 18;
             tmpAddress &= gbRomSizeMask;
-            gbMemoryMap[GB_MEM_CART_BANK0] = &gbRom[tmpAddress];
-            gbMemoryMap[GB_MEM_CART_BANK0 + 1] = &gbRom[tmpAddress + 0x1000];
-            gbMemoryMap[GB_MEM_CART_BANK0 + 2] = &gbRom[tmpAddress + 0x2000];
-            gbMemoryMap[GB_MEM_CART_BANK0 + 3] = &gbRom[tmpAddress + 0x3000];
+            MBCswitchROMBank0(tmpAddress);
         }
         break;
     case 0x6000: // memory model select
@@ -1548,21 +1484,14 @@ void memoryUpdateMapMMM01()
     }
 
     tmpAddress &= gbRomSizeMask;
-    gbMemoryMap[GB_MEM_CART_BANK1] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK1 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank1(tmpAddress);
 
     tmpAddress = gbDataMMM01.mapperRomBank0Remapping << 18;
     tmpAddress &= gbRomSizeMask;
-    gbMemoryMap[GB_MEM_CART_BANK0] = &gbRom[tmpAddress];
-    gbMemoryMap[GB_MEM_CART_BANK0 + 1] = &gbRom[tmpAddress + 0x1000];
-    gbMemoryMap[GB_MEM_CART_BANK0 + 2] = &gbRom[tmpAddress + 0x2000];
-    gbMemoryMap[GB_MEM_CART_BANK0 + 3] = &gbRom[tmpAddress + 0x3000];
+    MBCswitchROMBank0(tmpAddress);
 
     if (gbRamSize) {
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM] = &gbRam[gbDataMMM01.mapperRAMAddress];
-        gbMemoryMap[GB_MEM_EXTERNAL_RAM + 1] = &gbRam[gbDataMMM01.mapperRAMAddress + 0x1000];
+        MBCswitchRAMBank(gbDataMMM01.mapperRAMAddress);
     }
 }
 
