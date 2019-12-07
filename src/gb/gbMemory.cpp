@@ -3,6 +3,7 @@
 #include "../System.h"
 #include "../common/Port.h"
 #include "NLS.h"
+#include "Util.h"
 #include "gb.h"
 #include "gbConstants.h"
 #include "gbGlobals.h"
@@ -2015,4 +2016,92 @@ void mapperUpdateMap()
     default:
         return;
     }
+}
+
+void gbMbcSaveGame(uint8_t *&data)
+{
+   switch (mapperType)
+   {
+   case MBC1:
+      utilWriteMem(data, &gbDataMBC1, sizeof(gbDataMBC1));
+      break;
+   case MBC2:
+      utilWriteMem(data, &gbDataMBC2, sizeof(gbDataMBC2));
+      break;
+   case MBC3:
+      utilWriteMem(data, &gbDataMBC3, sizeof(gbDataMBC3));
+      break;
+   case MBC5:
+      utilWriteMem(data, &gbDataMBC5, sizeof(gbDataMBC5));
+      break;
+   case MBC7:
+      break;
+   case MMM01:
+      utilWriteMem(data, &gbDataMMM01, sizeof(gbDataMMM01));
+      break;
+   case GAMEGENIE:
+      break;
+   case GAMESHARK:
+      break;
+   case TAMA5:
+      utilWriteMem(data, &gbDataTAMA5, sizeof(gbDataTAMA5));
+      if (gbTAMA5ram != NULL)
+         utilWriteMem(data, gbTAMA5ram, gbTAMA5ramSize);
+      break;
+   case HUC1:
+      utilWriteMem(data, &gbDataHuC1, sizeof(gbDataHuC1));
+      break;
+   case HUC3:
+      utilWriteMem(data, &gbDataHuC3, sizeof(gbDataHuC3));
+      break;
+   default:
+      break;
+   }
+
+   if (gbRTCPresent)
+      utilWriteMem(data, &rtcData, sizeof(rtcData));
+}
+
+void gbMbcReadGame(const uint8_t *&data, int version)
+{
+   switch (mapperType)
+   {
+   case MBC1:
+      utilReadMem(&gbDataMBC1, data, sizeof(gbDataMBC1));
+      break;
+   case MBC2:
+      utilReadMem(&gbDataMBC2, data, sizeof(gbDataMBC2));
+      break;
+   case MBC3:
+      utilReadMem(&gbDataMBC3, data, sizeof(gbDataMBC3));
+      break;
+   case MBC5:
+      utilReadMem(&gbDataMBC5, data, sizeof(gbDataMBC5));
+      break;
+   case MBC7:
+      break;
+   case MMM01:
+      utilReadMem(&gbDataMMM01, data, sizeof(gbDataMMM01));
+      break;
+   case GAMEGENIE:
+      break;
+   case GAMESHARK:
+      break;
+   case TAMA5:
+      utilReadMem(&gbDataTAMA5, data, sizeof(gbDataTAMA5));
+      if (gbTAMA5ram != NULL)
+         utilReadMem(gbTAMA5ram, data, gbTAMA5ramSize);
+      break;
+   case HUC1:
+      utilReadMem(&gbDataHuC1, data, sizeof(gbDataHuC1));
+      break;
+   case HUC3:
+      utilReadMem(&gbDataHuC3, data, sizeof(gbDataHuC3));
+      break;
+   default:
+      break;
+   }
+
+   if (gbRTCPresent)
+      utilReadMem(&rtcData, data, sizeof(rtcData));
 }

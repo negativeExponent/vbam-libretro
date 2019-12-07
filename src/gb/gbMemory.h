@@ -356,6 +356,8 @@ bool gbUpdateSizes();
 uint8_t mapperReadRAM(uint16_t address);
 void mapperWrite(uint16_t address, uint8_t value);
 void mapperUpdateMap();
+void gbMbcSaveGame(uint8_t*&);
+void gbMbcReadGame(const uint8_t*&, int);
 
 #define MBC3_RTC_DATA_SIZE sizeof(int) * 10 + sizeof(uint64_t)
 

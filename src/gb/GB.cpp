@@ -3647,19 +3647,7 @@ unsigned int gbWriteSaveState(uint8_t* data, unsigned)
    if (gbSgbMode)
       gbSgbSaveGame(data);
 
-   utilWriteMem(data, &gbDataMBC1, sizeof(gbDataMBC1));
-   utilWriteMem(data, &gbDataMBC2, sizeof(gbDataMBC2));
-   utilWriteMem(data, &gbDataMBC3, sizeof(gbDataMBC3));
-   utilWriteMem(data, &gbDataMBC5, sizeof(gbDataMBC5));
-   utilWriteMem(data, &gbDataHuC1, sizeof(gbDataHuC1));
-   utilWriteMem(data, &gbDataHuC3, sizeof(gbDataHuC3));
-   utilWriteMem(data, &gbDataTAMA5, sizeof(gbDataTAMA5));
-   if (gbTAMA5ram != NULL)
-      utilWriteMem(data, gbTAMA5ram, gbTAMA5ramSize);
-   utilWriteMem(data, &gbDataMMM01, sizeof(gbDataMMM01));
-
-   if (gbRTCPresent)
-      utilWriteMem(data, &rtcData, sizeof(rtcData));
+   gbMbcSaveGame(data);
 
    utilWriteMem(data, gbPalette, 128 * sizeof(uint16_t));
    utilWriteMem(data, &gbMemory[0x8000], 0x8000);
@@ -3774,19 +3762,7 @@ bool gbReadSaveState(const uint8_t* data, unsigned)
    else
       gbSgbMask = 0; // loading a game at the wrong time causes no display
 
-   utilReadMem(&gbDataMBC1, data, sizeof(gbDataMBC1));
-   utilReadMem(&gbDataMBC2, data, sizeof(gbDataMBC2));
-   utilReadMem(&gbDataMBC3, data, sizeof(gbDataMBC3));
-   utilReadMem(&gbDataMBC5, data, sizeof(gbDataMBC5));
-   utilReadMem(&gbDataHuC1, data, sizeof(gbDataHuC1));
-   utilReadMem(&gbDataHuC3, data, sizeof(gbDataHuC3));
-   utilReadMem(&gbDataTAMA5, data, sizeof(gbDataTAMA5));
-   if (gbTAMA5ram != NULL)
-      utilReadMem(gbTAMA5ram, data, gbTAMA5ramSize);
-   utilReadMem(&gbDataMMM01, data, sizeof(gbDataMMM01));
-
-   if (gbRTCPresent)
-      utilReadMem(&rtcData, data, sizeof(rtcData));
+   gbMbcReadGame(data, version);
 
    utilReadMem(gbPalette, data, 128 * sizeof(uint16_t));
    utilReadMem(&gbMemory[0x8000], data, 0x8000);
