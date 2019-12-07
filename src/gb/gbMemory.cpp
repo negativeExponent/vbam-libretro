@@ -2035,6 +2035,7 @@ void gbMbcSaveGame(uint8_t *&data)
       utilWriteMem(data, &gbDataMBC5, sizeof(gbDataMBC5));
       break;
    case MBC7:
+      utilWriteMem(data, &gbDataMBC7, sizeof(gbDataMBC7));
       break;
    case MMM01:
       utilWriteMem(data, &gbDataMMM01, sizeof(gbDataMMM01));
@@ -2079,6 +2080,7 @@ void gbMbcReadGame(const uint8_t *&data, int version)
       utilReadMem(&gbDataMBC5, data, sizeof(gbDataMBC5));
       break;
    case MBC7:
+      utilReadMem(&gbDataMBC7, data, sizeof(gbDataMBC7));
       break;
    case MMM01:
       utilReadMem(&gbDataMMM01, data, sizeof(gbDataMMM01));
