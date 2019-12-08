@@ -38,6 +38,9 @@
 #define FRAMERATE  (16777216.0 / 280896.0) // 59.73
 #define SAMPLERATE 32768.0
 
+// just provide enough audio buffer size
+#define SOUND_BUFFER_SIZE 2048
+
 static retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
 static retro_input_poll_t poll_cb;
@@ -1375,6 +1378,7 @@ static void updateRumble()
 
 static bool firstrun = true;
 static unsigned has_frame;
+static int16_t soundbuf[SOUND_BUFFER_SIZE];
 
 void retro_run(void)
 {
@@ -1384,13 +1388,13 @@ void retro_run(void)
    {
       firstrun = false;
       /* Check if GB game has RTC data. Has to be check here since this is where the data will be
-         * available when using libretro api. */
+       * available when using libretro api. */
       if ((type == IMAGE_GB) && gbRTCPresent)
       {
          /* Check if any RTC has been loaded, zero value means nothing has been loaded. */
          if (!rtcData.mapperSeconds && !rtcData.mapperLSeconds && rtcData.mapperLastTime == (time_t)-1)
          {
-            /* Initialize RTC using local time if needed */
+            /* Initialize RTC */
             gbInitRTC();
          }
       }
@@ -1409,9 +1413,11 @@ void retro_run(void)
       updateRumble();
 
    has_frame = 0;
+   core->emuMain(core->emuCount);
+   video_cb(has_frame ? pix : NULL, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
 
-   while (!has_frame)
-      core->emuMain(core->emuCount);
+   int soundlen = core->emuFlushAudio(soundbuf);
+   audio_batch_cb((const int16_t*)soundbuf, soundlen >> 1);
 }
 
 static unsigned serialize_size = 0;
@@ -1772,13 +1778,11 @@ bool systemCanChangeSoundQuality(void)
 
 void systemDrawScreen(uint16_t *pix)
 {
-   video_cb(pix, systemWidth, systemHeight, systemWidth << 1);
    has_frame++;
 }
 
 void systemFrame(void)
 {
-   has_frame++;
 }
 
 void systemGbBorderOn(void)

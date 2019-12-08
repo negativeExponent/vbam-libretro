@@ -56,16 +56,25 @@ extern gb_effects_config_t gb_effects_config; // current configuration
 void gbSoundReset();
 
 // Emulates write to sound hardware
-void gbSoundEvent(int st, uint16_t address, int data);
-#define SOUND_EVENT gbSoundEvent
+void gbSoundEvent(uint16_t address, int data);
 
 // Emulates read from sound hardware
-uint8_t gbSoundRead(int st, uint16_t address);
+uint8_t gbSoundRead(uint16_t address);
 
-// Notifies emulator that SOUND_CLOCK_TICKS clocks have passed
+// Counts up sound ticks since last gbSoundTick() is called
+void gbUpdateSoundTicks(int);
+
+// Notifies emulator that SOUND_CLOCK_TICKS clocks have passed,
+// Resets soundTicksUp to zero each time its called
 void gbSoundTick();
-extern int SOUND_CLOCK_TICKS; // Number of 16.8 MHz clocks between calls to gbSoundTick()
-extern int soundTicks; // Number of 16.8 MHz clocks until gbSoundTick() will be called
+
+int gbSoundEndFrame(int16_t*);
+
+// Number of 16.8 MHz clocks between calls to gbSoundTick()
+// extern int SOUND_CLOCK_TICKS;
+
+// Number of 16.8 MHz clocks until gbSoundTick() will be called
+// extern int soundTicks;
 
 // Saves/loads emulator state
 void gbSoundSaveGame(uint8_t*&);

@@ -42,10 +42,13 @@ struct EmulatedSystem
    bool (*emuWriteBMP)(const char*);
    // emulator update CPSR (ARM only)
    void (*emuUpdateCPSR)();
+   // get audio sample buffer, returns length
+   int (*emuFlushAudio)(int16_t*);
    // emulator has debugger
    bool emuHasDebugger;
    // clock ticks to emulate
    int emuCount;
+
 };
 
 enum gba_hardware

@@ -21,25 +21,29 @@ static float soundVolume_ = -1;
 static int prevSoundEnable = -1;
 static bool declicking = false;
 
-int const chan_count = 4;
-int const ticks_to_time = 2 * GB_APU_OVERCLOCK;
+static int const chan_count = 4;
+static int const ticks_to_time = 2 * GB_APU_OVERCLOCK;
+static int soundTicksUp = 0;
 
-#define BLIP_TIME ((SOUND_CLOCK_TICKS - soundTicks) * ticks_to_time)
-
-uint8_t gbSoundRead(int st, uint16_t address)
+void gbUpdateSoundTicks(int ticks)
 {
-    if (gb_apu && address >= NR10 && address <= 0xFF3F)
-        return gb_apu->read_register((blip_time_t)BLIP_TIME, address);
-
-    return gbMemory[address];
+    soundTicksUp += ticks;
 }
 
-void gbSoundEvent(int st, uint16_t address, int data)
+static inline blip_time_t blip_time()
+{
+    return soundTicksUp * ticks_to_time;
+}
+
+uint8_t gbSoundRead(uint16_t address)
+{
+    return gb_apu->read_register(blip_time(), address);
+}
+
+void gbSoundEvent(uint16_t address, int data)
 {
     gbMemory[address] = data;
-
-    if (gb_apu && address >= NR10 && address <= 0xFF3F)
-        gb_apu->write_register((blip_time_t)BLIP_TIME, address, data);
+    gb_apu->write_register(blip_time(), address, data);
 }
 
 static void end_frame(blip_time_t time)
@@ -84,7 +88,7 @@ void gbSoundTick()
 {
     if (gb_apu && stereo_buffer) {
         // Run sound hardware to present
-        end_frame((blip_time_t)(SOUND_CLOCK_TICKS * ticks_to_time));
+        end_frame(blip_time());
 
         flush_samples(stereo_buffer);
 
@@ -97,6 +101,34 @@ void gbSoundTick()
         if (soundVolume_ != soundGetVolume())
             apply_volume();
     }
+
+    soundTicksUp = 0;
+}
+
+int gbSoundEndFrame(int16_t *soundbuf)
+{
+   int numSamples = 0;
+   if (soundbuf && gb_apu && stereo_buffer)
+   {
+      blip_time_t ticks = blip_time();
+      gb_apu->end_frame(ticks);
+      stereo_buffer->end_frame(ticks);
+      numSamples = stereo_buffer->read_samples((blip_sample_t*)soundbuf, stereo_buffer->samples_avail());
+
+      // Update effects config if it was changed
+      if (memcmp(&gb_effects_config_current, &gb_effects_config,
+           sizeof gb_effects_config) ||
+           soundGetEnable() != prevSoundEnable)
+      {
+         apply_effects();
+      }
+      if (soundVolume_ != soundGetVolume())
+      {
+         apply_volume();
+      }
+   }
+   soundTicksUp = 0;
+   return numSamples;
 }
 
 static void reset_apu()
@@ -112,7 +144,7 @@ static void reset_apu()
     if (stereo_buffer)
         stereo_buffer->clear();
 
-    soundTicks = SOUND_CLOCK_TICKS;
+    soundTicksUp = 0;
 }
 
 static void remake_stereo_buffer()
@@ -168,42 +200,40 @@ bool gbSoundGetDeclicking()
 
 void gbSoundReset()
 {
-    SOUND_CLOCK_TICKS = 35112;
-
     remake_stereo_buffer();
     reset_apu();
 
     soundPaused = 1;
 
-    gbSoundEvent(0, 0xff10, 0x80);
-    gbSoundEvent(0, 0xff11, 0xbf);
-    gbSoundEvent(0, 0xff12, 0xf3);
-    gbSoundEvent(0, 0xff14, 0xbf);
-    gbSoundEvent(0, 0xff16, 0x3f);
-    gbSoundEvent(0, 0xff17, 0x00);
-    gbSoundEvent(0, 0xff19, 0xbf);
+    gbSoundEvent(0xff10, 0x80);
+    gbSoundEvent(0xff11, 0xbf);
+    gbSoundEvent(0xff12, 0xf3);
+    gbSoundEvent(0xff14, 0xbf);
+    gbSoundEvent(0xff16, 0x3f);
+    gbSoundEvent(0xff17, 0x00);
+    gbSoundEvent(0xff19, 0xbf);
 
-    gbSoundEvent(0, 0xff1a, 0x7f);
-    gbSoundEvent(0, 0xff1b, 0xff);
-    gbSoundEvent(0, 0xff1c, 0xbf);
-    gbSoundEvent(0, 0xff1e, 0xbf);
+    gbSoundEvent(0xff1a, 0x7f);
+    gbSoundEvent(0xff1b, 0xff);
+    gbSoundEvent(0xff1c, 0xbf);
+    gbSoundEvent(0xff1e, 0xbf);
 
-    gbSoundEvent(0, 0xff20, 0xff);
-    gbSoundEvent(0, 0xff21, 0x00);
-    gbSoundEvent(0, 0xff22, 0x00);
-    gbSoundEvent(0, 0xff23, 0xbf);
-    gbSoundEvent(0, 0xff24, 0x77);
-    gbSoundEvent(0, 0xff25, 0xf3);
+    gbSoundEvent(0xff20, 0xff);
+    gbSoundEvent(0xff21, 0x00);
+    gbSoundEvent(0xff22, 0x00);
+    gbSoundEvent(0xff23, 0xbf);
+    gbSoundEvent(0xff24, 0x77);
+    gbSoundEvent(0xff25, 0xf3);
 
     if (gbHardware & 0x4)
-        gbSoundEvent(0, 0xff26, 0xf0);
+        gbSoundEvent(0xff26, 0xf0);
     else
-        gbSoundEvent(0, 0xff26, 0xf1);
+        gbSoundEvent(0xff26, 0xf1);
 
     /* workaround for game Beetlejuice */
     if (gbHardware & 0x1) {
-        gbSoundEvent(0, 0xff24, 0x77);
-        gbSoundEvent(0, 0xff25, 0xf3);
+        gbSoundEvent(0xff24, 0x77);
+        gbSoundEvent(0xff25, 0xf3);
     }
 
     int addr = 0xff30;
@@ -274,7 +304,7 @@ static variable_desc gb_state[] = {
     SKIP(int[13], room_for_expansion),
 
     // Emulator
-    LOAD(int, soundTicks),
+    LOAD(int, soundTicksUp),
     SKIP(int[15], room_for_expansion),
 
     { NULL, 0 }

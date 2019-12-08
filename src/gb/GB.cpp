@@ -600,7 +600,7 @@ static void gbWriteIO(uint16_t address, uint8_t value)
    case 0x3d:
    case 0x3e:
    case 0x3f:
-      gbSoundEvent(soundTicks, address, value);
+      gbSoundEvent(address, value);
       return;
 
    case 0x40:
@@ -1261,7 +1261,7 @@ static uint8_t gbReadIO(uint16_t address)
    case 0x3d:
    case 0x3e:
    case 0x3f:
-      return gbSoundRead(soundTicks, address);
+      return gbSoundRead(address);
    case 0x40:
       return register_LCDC;
    case 0x41:
@@ -2688,31 +2688,9 @@ void gbEmulate(int ticksToStop)
             clockTicks = 1000;
 
          clockTicks = gbGetNextEvent(clockTicks);
-
-         /*if(gbLcdTicksDelayed < clockTicks)
-        clockTicks = gbLcdTicksDelayed;
-
-      if(gbLcdLYIncrementTicksDelayed < clockTicks)
-        clockTicks = gbLcdLYIncrementTicksDelayed;
-
-      if(gbLcdLYIncrementTicks < clockTicks)
-        clockTicks = gbLcdLYIncrementTicks;
-
-      if(gbSerialOn && (gbSerialTicks < clockTicks))
-        clockTicks = gbSerialTicks;
-
-      if(gbTimerOn && (((gbInternalTimer) & gbTimerMask[gbTimerMode])+1 < clockTicks))
-        clockTicks = ((gbInternalTimer) & gbTimerMask[gbTimerMode])+1;
-
-      if(soundTicks && (soundTicks < clockTicks))
-        clockTicks = soundTicks;
-
-      if ((clockTicks<=0) || (gbInterruptWait))
-          clockTicks = 1;*/
       }
       else
       {
-
          // First we apply the clockTicks, then we execute the opcodes.
          opcode1 = 0;
          opcode2 = 0;
@@ -2799,6 +2777,8 @@ void gbEmulate(int ticksToStop)
       }
 
       ticksToStop -= clockTicks;
+
+      gbUpdateSoundTicks(clockTicks << (1 - gbSpeed));
 
       // DIV register emulation
       gbDivTicks -= clockTicks;
@@ -3335,6 +3315,7 @@ void gbEmulate(int ticksToStop)
                      gbLastTime = currentTime;
                      gbFrameCount = 0;
                   }
+
                   frameDone = true;
                }
             }
@@ -3450,13 +3431,6 @@ void gbEmulate(int ticksToStop)
 #endif
          }
 #endif // NO_LINK
-
-      soundTicks -= (clockTicks << (1 - gbSpeed));
-      while (soundTicks < 0)
-      {
-         gbSoundTick();
-         soundTicks += SOUND_CLOCK_TICKS;
-      }
 
       // timer emulation
 
@@ -3918,11 +3892,13 @@ struct EmulatedSystem GBSystem = {
    gbWriteBMPFile,
    // emuUpdateCPSR
    NULL,
+   // emuFlushAudio
+   gbSoundEndFrame,
    // emuHasDebugger
    false,
 // emuCount
 #ifdef FINAL_VERSION
-   72000,
+   72000 / 2,
 #else
    1000,
 #endif

@@ -405,8 +405,8 @@ inline int CPUUpdateTicks()
 {
    int cpuLoopTicks = lcdTicks;
 
-   if (soundTicks < cpuLoopTicks)
-      cpuLoopTicks = soundTicks;
+   //if (soundTicks < cpuLoopTicks)
+      //cpuLoopTicks = soundTicks;
 
    if (timers.tm[0].On && (timers.tm[0].Ticks < cpuLoopTicks))
    {
@@ -2228,6 +2228,8 @@ void CPULoop(int ticks)
 
          lcdTicks -= clockTicks;
 
+         soundUpdateTicks(clockTicks);
+
          if (lcdTicks <= 0)
          {
             if (lcd.dispstat & 1)
@@ -2316,17 +2318,6 @@ void CPULoop(int ticks)
                   }
                }
             }
-         }
-
-         // we shouldn't be doing sound in stop state, but we loose synchronization
-         // if sound is disabled, so in stop state, soundTick will just produce
-         // mute sound
-
-         soundTicks -= clockTicks;
-         if (soundTicks <= 0)
-         {
-            psoundTickfn();
-            soundTicks += SOUND_CLOCK_TICKS;
          }
 
          if (!stopState)
@@ -2590,6 +2581,8 @@ struct EmulatedSystem GBASystem = {
    NULL,
    // emuUpdateCPSR
    CPUUpdateCPSR,
+   // emuFlushAudio
+   soundEndFrame,
    // emuHasDebugger
    true,
 // emuCount

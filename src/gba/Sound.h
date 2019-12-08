@@ -72,8 +72,12 @@ void interp_rate();
 void psoundTickfn();
 extern int SOUND_CLOCK_TICKS; // Number of 16.8 MHz clocks between calls to soundTick()
 
+void soundUpdateTicks(int);
+
+int soundEndFrame(int16_t*);
+
 // 2018-12-10 - counts up from 0 since last psoundTickfn() was called
-extern int soundTicks;
+//extern int soundTicks;
 
 // Saves/loads emulator state
 void soundSaveGame(uint8_t*&);
