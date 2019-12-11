@@ -39,7 +39,7 @@
 #define SAMPLERATE 32768.0
 
 // just provide enough audio buffer size
-#define SOUND_BUFFER_SIZE 2048
+#define SOUND_BUFFER_SIZE 4096
 
 static retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
@@ -213,19 +213,19 @@ static void gbInitRTC(void)
 
 static void SetGBBorder(unsigned val)
 {
-   struct retro_system_av_info avinfo;
-   unsigned _changed = 0;
+   struct retro_system_av_info avinfo = { 0 };
+   unsigned geometry_changed = 0;
 
    switch (val)
    {
    case 0:
-      _changed = ((systemWidth != gbWidth) || (systemHeight != gbHeight)) ? 1 : 0;
+      geometry_changed = ((systemWidth != gbWidth) || (systemHeight != gbHeight)) ? 1 : 0;
       systemWidth = gbBorderLineSkip = gbWidth;
       systemHeight = gbHeight;
       gbBorderColumnSkip = gbBorderRowSkip = 0;
       break;
    case 1:
-      _changed = ((systemWidth != sgbWidth) || (systemHeight != sgbHeight)) ? 1 : 0;
+      geometry_changed = ((systemWidth != sgbWidth) || (systemHeight != sgbHeight)) ? 1 : 0;
       systemWidth = gbBorderLineSkip = sgbWidth;
       systemHeight = sgbHeight;
       gbBorderColumnSkip = (sgbWidth - gbWidth) >> 1;
@@ -235,7 +235,7 @@ static void SetGBBorder(unsigned val)
 
    retro_get_system_av_info(&avinfo);
 
-   if (!_changed)
+   if (!geometry_changed)
       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &avinfo);
    else
       environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &avinfo);
@@ -932,9 +932,13 @@ void retro_reset(void)
 #define MAX_PLAYERS   4
 #define MAX_BUTTONS   10
 #define TURBO_BUTTONS 2
+
 static bool option_turboEnable = false;
 static unsigned option_turboDelay = 3;
-static unsigned turbo_delay_counter[MAX_PLAYERS][TURBO_BUTTONS] = { { 0 }, { 0 } };
+
+static bool turbo_pressed[4] = { false };
+static unsigned turbo_delay_counter[MAX_PLAYERS] = { 0 };
+
 static const unsigned binds[MAX_BUTTONS] = {
    RETRO_DEVICE_ID_JOYPAD_A,
    RETRO_DEVICE_ID_JOYPAD_B,
@@ -1815,33 +1819,43 @@ void systemMessage(int, const char *fmt, ...)
 uint32_t systemReadJoypad(int which)
 {
    uint32_t J = 0;
-   unsigned i, buttons = MAX_BUTTONS - ((type == IMAGE_GB) ? 2 : 0); // gb only has 8 buttons
 
    if (which == -1)
       which = 0;
 
    if (retropad_device[which] == RETRO_DEVICE_JOYPAD)
    {
-      for (i = 0; i < buttons; i++)
+      for (int i = 0; i < MAX_BUTTONS; i++)
          J |= input_cb(which, RETRO_DEVICE_JOYPAD, 0, binds[i]) << i;
 
       if (option_turboEnable)
       {
          /* Handle Turbo A & B buttons */
-         for (i = 0; i < TURBO_BUTTONS; i++)
+         for (int j = 0; j < TURBO_BUTTONS; j++)
          {
-            if (input_cb(which, RETRO_DEVICE_JOYPAD, 0, turbo_binds[i]))
+            if (input_cb(which, RETRO_DEVICE_JOYPAD, 0, turbo_binds[j]))
             {
-               if (!turbo_delay_counter[which][i])
-                  J |= 1 << i;
-               turbo_delay_counter[which][i]++;
-               if (turbo_delay_counter[which][i] > option_turboDelay)
-                  /* Reset the toggle if delay value is reached */
-                  turbo_delay_counter[which][i] = 0;
+               turbo_pressed[which] = true;
+               if (turbo_delay_counter[which] == 0)
+                  J |= 1 << j;
             }
-            else
-               /* If the button is not pressed, just reset the toggle */
-               turbo_delay_counter[which][i] = 0;
+         }
+
+         // if turbo buttons was pressed, start turbo counter
+         if (turbo_pressed[which])
+         {
+            turbo_delay_counter[which]++;
+
+            // Reset the toggle if delay value is reached
+            if (turbo_delay_counter[which] > option_turboDelay)
+               turbo_delay_counter[which] = 0;
+         }
+
+         // just reset pressed state and counter if no turbo buttons were pressed
+         else
+         {
+            turbo_delay_counter[which] = 0;
+            turbo_pressed[which] = false;
          }
       }
    }
