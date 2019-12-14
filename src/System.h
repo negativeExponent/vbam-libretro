@@ -19,7 +19,7 @@ class SoundDriver;
 struct EmulatedSystem
 {
    // main emulation function
-   void (*emuMain)(int);
+   void (*emuMain)(int, uint16_t*);
    // reset emulator
    void (*emuReset)();
    // clean up memory
@@ -112,5 +112,19 @@ extern int systemSaveUpdateCounter;
 extern int systemSpeed;
 #define SYSTEM_SAVE_UPDATED 30
 #define SYSTEM_SAVE_NOT_UPDATED 0
+
+#define BIT(x) (1 << (x))
+
+// default keys
+#define JOY_A      BIT(0)
+#define JOY_B      BIT(1)
+#define JOY_SELECT BIT(2)
+#define JOY_START  BIT(3)
+#define JOY_RIGHT  BIT(4)
+#define JOY_LEFT   BIT(5)
+#define JOY_UP     BIT(6)
+#define JOY_DOWN   BIT(7)
+#define JOY_R      BIT(8)
+#define JOY_L      BIT(9)
 
 #endif // SYSTEM_H

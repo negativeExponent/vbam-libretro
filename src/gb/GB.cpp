@@ -165,7 +165,7 @@ bool gbBatteryError = false;
 int gbCaptureNumber = 0;
 bool gbCapture = false;
 bool gbCapturePrevious = false;
-int gbJoymask[4] = { 0, 0, 0, 0 };
+uint16_t gbJoymask[4] = { 0, 0, 0, 0 };
 static bool allow_colorizer_hack;
 
 #define GBSAVE_GAME_VERSION_1 1
@@ -1167,7 +1167,7 @@ static uint8_t gbReadIO(uint16_t address)
             default: joy = 0; break;
             }
          }
-         int joystate = gbJoymask[joy];
+         uint16_t joystate = gbJoymask[joy];
          if (!(joystate & 0x80)) P1 |= 0x08;
          if (!(joystate & 0x40)) P1 |= 0x04;
          if (!(joystate & 0x20)) P1 |= 0x02;
@@ -1176,7 +1176,7 @@ static uint8_t gbReadIO(uint16_t address)
       }
       else if ((P1 & 0x30) == 0x10)
       {
-         int joy = 0;
+         uint16_t joy = 0;
          P1 &= 0xf0;
          if (gbSgbMode && gbSgbMultiplayer)
          {
@@ -1189,7 +1189,7 @@ static uint8_t gbReadIO(uint16_t address)
             default: joy = 0; break;
             }
          }
-         int joystate = gbJoymask[joy];
+         uint16_t joystate = gbJoymask[joy];
          if (!(joystate & 0x08)) P1 |= 0x08;
          if (!(joystate & 0x04)) P1 |= 0x04;
          if (!(joystate & 0x02)) P1 |= 0x02;
@@ -2624,7 +2624,7 @@ void gbDrawLine()
       dest += gbBorderColumnSkip;
 }
 
-static void gbUpdateJoypads(bool readSensors)
+static void gbUpdateJoypads(uint16_t *joybuf)
 {
    if (systemReadJoypads())
    {
@@ -2633,30 +2633,26 @@ static void gbUpdateJoypads(bool readSensors)
       {
          if (gbSgbFourPlayers)
          {
-            gbJoymask[0] = systemReadJoypad(0);
-            gbJoymask[1] = systemReadJoypad(1);
-            gbJoymask[2] = systemReadJoypad(2);
-            gbJoymask[3] = systemReadJoypad(3);
+            gbJoymask[0] = joybuf[0];
+            gbJoymask[1] = joybuf[1];
+            gbJoymask[2] = joybuf[2];
+            gbJoymask[3] = joybuf[3];
          }
          else
          {
-            gbJoymask[0] = systemReadJoypad(0);
-            gbJoymask[1] = systemReadJoypad(1);
+            gbJoymask[0] = joybuf[0];
+            gbJoymask[1] = joybuf[1];
          }
       }
       else
-      {
-         gbJoymask[0] = systemReadJoypad(-1);
-      }
+         gbJoymask[0] = joybuf[0];
    }
 
-   if (readSensors && gbRomType == 0x22)
-   {
+   if (gbRomType == 0x22)
       systemUpdateMotionSensor();
-   }
 }
 
-void gbEmulate(int ticksToStop)
+void gbEmulate(int ticksToStop, uint16_t *joybuf)
 {
    gbRegister tempRegister;
    uint8_t tempValue;
@@ -2672,7 +2668,7 @@ void gbEmulate(int ticksToStop)
    bool execute = false;
    bool frameDone = false;
 
-   gbUpdateJoypads(true);
+   gbUpdateJoypads(joybuf);
 
    while (1)
    {

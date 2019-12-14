@@ -2117,15 +2117,15 @@ void CPUInterrupt()
    WRITE32LE((uint32_t*)&biosProtected, 0xe3a02004);
 }
 
-static uint32_t joy;
+static uint16_t joy;
 static bool hasFrames;
 
-static void gbaUpdateJoypads(void)
+static void gbaUpdateJoypads(uint16_t *joybuf)
 {
    // update joystick information
    if (systemReadJoypads())
       // read default joystick
-      joy = systemReadJoypad(-1);
+      joy = joybuf[0];
 
    P1 = 0x03FF ^ (joy & 0x3FF);
    UPDATE_REG(REG_KEYINPUT, P1);
@@ -2158,7 +2158,7 @@ static void gbaUpdateJoypads(void)
    systemUpdateMotionSensor();
 }
 
-void CPULoop(int ticks)
+void CPULoop(int ticks, uint16_t *joybuf)
 {
    int clockTicks;
    int timerOverflow = 0;
@@ -2177,7 +2177,7 @@ void CPULoop(int ticks)
    if (cpuNextEvent > ticks)
       cpuNextEvent = ticks;
 
-   gbaUpdateJoypads();
+   gbaUpdateJoypads(joybuf);
 
    for (;;)
    {

@@ -41,6 +41,10 @@
 // just provide enough audio buffer size
 #define SOUND_BUFFER_SIZE 4096
 
+#define MAX_PLAYERS   4
+#define MAX_BUTTONS   10
+#define TURBO_BUTTONS 2
+
 static retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
 static retro_input_poll_t poll_cb;
@@ -51,16 +55,34 @@ retro_audio_sample_batch_t audio_batch_cb;
 
 static char retro_system_directory[2048];
 static char biosfile[4096];
+
+// api settings
 static bool can_dupe = false;
+static bool libretro_supports_bitmasks = false;
 
 // core options
-static bool option_sndInterpolation = true;
 static bool option_useBios = false;
 static bool option_colorizerHack = false;
 static bool option_forceRTCenable = false;
 static bool option_showAdvancedOptions = false;
-static double option_sndFiltering = 0.5;
 static unsigned option_gbPalette = 0;
+
+static double option_sndFiltering = 0.5;
+static bool option_sndInterpolation = true;
+
+static bool option_turboEnable = false;
+static unsigned option_turboDelay = 3;
+
+static int option_analogDeadzone = 0;
+static int option_gyroSensitivity = 0;
+static int option_tiltSensitivity = 0;
+static bool option_swapAnalogSticks = false;
+
+static uint8_t sensorDarkness = 0xE8;
+static uint8_t sensorDarknessLevel = 0; // so we can adjust sensor from gamepad
+
+static bool turbo_pressed[4] = { false };
+static unsigned turbo_delay_counter[MAX_PLAYERS] = { 0 };
 
 static unsigned retropad_device[4] = { 0 };
 static unsigned systemWidth = GBA_WIDTH;
@@ -140,6 +162,8 @@ static palettes_t defaultGBPalettes[] = {
        { 0x7BDE, 0x5778, 0x5640, 0x0000, 0x7BDE, 0x529C, 0x2990, 0x0000 },
    }
 };
+
+static void systemUpdateSolarSensor(int level);
 
 static void set_gbPalette(void)
 {
@@ -454,11 +478,12 @@ void retro_init(void)
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &yes);
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble))
-   {
       rumble_cb = rumble.set_rumble_state;
-   }
    else
       rumble_cb = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
+      libretro_supports_bitmasks = true;
 }
 
 static const char *gbGetCartridgeType(void)
@@ -817,6 +842,8 @@ void retro_deinit(void)
    emulating = 0;
    core->emuCleanUp();
    soundShutdown();
+   libretro_supports_bitmasks = false;
+   can_dupe = false;
 }
 
 void retro_reset(void)
@@ -824,41 +851,6 @@ void retro_reset(void)
    core->emuReset();
    set_gbPalette();
 }
-
-#define MAX_PLAYERS   4
-#define MAX_BUTTONS   10
-#define TURBO_BUTTONS 2
-
-static bool option_turboEnable = false;
-static unsigned option_turboDelay = 3;
-
-static bool turbo_pressed[4] = { false };
-static unsigned turbo_delay_counter[MAX_PLAYERS] = { 0 };
-
-static const unsigned binds[MAX_BUTTONS] = {
-   RETRO_DEVICE_ID_JOYPAD_A,
-   RETRO_DEVICE_ID_JOYPAD_B,
-   RETRO_DEVICE_ID_JOYPAD_SELECT,
-   RETRO_DEVICE_ID_JOYPAD_START,
-   RETRO_DEVICE_ID_JOYPAD_RIGHT,
-   RETRO_DEVICE_ID_JOYPAD_LEFT,
-   RETRO_DEVICE_ID_JOYPAD_UP,
-   RETRO_DEVICE_ID_JOYPAD_DOWN,
-   RETRO_DEVICE_ID_JOYPAD_R,
-   RETRO_DEVICE_ID_JOYPAD_L
-};
-
-static const unsigned turbo_binds[TURBO_BUTTONS] = {
-   RETRO_DEVICE_ID_JOYPAD_X,
-   RETRO_DEVICE_ID_JOYPAD_Y
-};
-
-static void systemUpdateSolarSensor(int level);
-static uint8_t sensorDarkness = 0xE8;
-static uint8_t sensorDarknessLevel = 0; // so we can adjust sensor from gamepad
-static int option_analogDeadzone;
-static int option_gyroSensitivity, option_tiltSensitivity;
-static bool option_swapAnalogSticks;
 
 static void update_variables(bool startup)
 {
@@ -1226,7 +1218,7 @@ static void updateInput_MotionSensors(void)
 }
 
 // Update solar sensor level by gamepad buttons, default L2/R2
-void updateInput_SolarSensor(void)
+static void updateInput_SolarSensor(void)
 {
    static bool buttonpressed = false;
 
@@ -1276,13 +1268,132 @@ static void updateRumble()
    if (rumble_offtimer) --rumble_offtimer;
 }
 
+static const unsigned binds[MAX_BUTTONS] = {
+   RETRO_DEVICE_ID_JOYPAD_A,
+   RETRO_DEVICE_ID_JOYPAD_B,
+   RETRO_DEVICE_ID_JOYPAD_SELECT,
+   RETRO_DEVICE_ID_JOYPAD_START,
+   RETRO_DEVICE_ID_JOYPAD_RIGHT,
+   RETRO_DEVICE_ID_JOYPAD_LEFT,
+   RETRO_DEVICE_ID_JOYPAD_UP,
+   RETRO_DEVICE_ID_JOYPAD_DOWN,
+   RETRO_DEVICE_ID_JOYPAD_R,
+   RETRO_DEVICE_ID_JOYPAD_L
+};
+
+static const unsigned turbo_binds[TURBO_BUTTONS] = {
+   RETRO_DEVICE_ID_JOYPAD_X,
+   RETRO_DEVICE_ID_JOYPAD_Y
+};
+
+static uint16_t updateJoypad(unsigned which)
+{
+#define UPDATE_TURBO_DELAY_COUNTER                                            \
+   /* if turbo buttons was pressed, start turbo counter*/                     \
+   if (turbo_pressed[which])                                                  \
+   {                                                                          \
+      turbo_delay_counter[which]++;                                           \
+      /* Reset the toggle if delay value is reached*/                         \
+      if (turbo_delay_counter[which] > option_turboDelay)                     \
+         turbo_delay_counter[which] = 0;                                      \
+   }                                                                          \
+   /* just reset pressed state and counter if no turbo buttons were pressed*/ \
+   else                                                                       \
+   {                                                                          \
+      turbo_delay_counter[which] = 0;                                         \
+      turbo_pressed[which]       = false;                                     \
+   }
+
+   uint16_t J = 0;
+
+   if (retropad_device[which] == RETRO_DEVICE_JOYPAD)
+   {
+      if (libretro_supports_bitmasks)
+      {
+         uint16_t ret = input_cb(which, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+
+         // handle normal buttons
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_B))
+            J |= JOY_B;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_SELECT))
+            J |= JOY_SELECT;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_START))
+            J |= JOY_START;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_UP))
+            J |= JOY_UP;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_DOWN))
+            J |= JOY_DOWN;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_LEFT))
+            J |= JOY_LEFT;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_RIGHT))
+            J |= JOY_RIGHT;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_A))
+            J |= JOY_A;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_L))
+            J |= JOY_L;
+         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_R))
+            J |= JOY_R;
+
+         // handle turbo button mode
+         if (option_turboEnable)
+         {
+            // Handle Turbo A & B buttons
+            for (unsigned j = 0; j < TURBO_BUTTONS; j++)
+            {
+               if (ret & BIT(turbo_binds[j]))
+               {
+                  turbo_pressed[which] = true;
+                  if (turbo_delay_counter[which] == 0)
+                     J |= (JOY_A + j);
+                  else
+                     J &= ~(JOY_A + j);
+               }
+            }
+
+            UPDATE_TURBO_DELAY_COUNTER;
+         }
+      }
+      else
+      {
+         for (int i = 0; i < MAX_BUTTONS; i++)
+            J |= input_cb(which, RETRO_DEVICE_JOYPAD, 0, binds[i]) << i;
+
+         if (option_turboEnable)
+         {
+            // Handle Turbo A & B buttons
+            for (int j = 0; j < TURBO_BUTTONS; j++)
+            {
+               if (input_cb(which, RETRO_DEVICE_JOYPAD, 0, turbo_binds[j]))
+               {
+                  turbo_pressed[which] = true;
+                  if (turbo_delay_counter[which] == 0)
+                     J |= (JOY_A + j);
+               }
+            }
+
+            UPDATE_TURBO_DELAY_COUNTER;
+         }
+      }
+   }
+
+   // Do not allow opposing directions
+   if ((J & (JOY_UP | JOY_DOWN)) == (JOY_UP | JOY_DOWN))
+      J &= ~(JOY_UP | JOY_DOWN);
+   else if ((J & (JOY_LEFT | JOY_RIGHT)) == (JOY_LEFT | JOY_RIGHT))
+      J &= ~(JOY_LEFT | JOY_RIGHT);
+
+#undef UPDATE_TURBO_DELAY_COUNTER
+
+   return J;
+}
+
 static bool firstrun = true;
 static unsigned has_frame;
 static int16_t soundbuf[SOUND_BUFFER_SIZE];
 
 void retro_run(void)
 {
-   bool updated = false;
+   bool updated = false;   
 
    if (firstrun)
    {
@@ -1312,8 +1423,23 @@ void retro_run(void)
    if (hardware & HW_RUMBLE)
       updateRumble();
 
+   uint16_t joybuf[4];
+   joybuf[0] = updateJoypad(0);
+   if (type == IMAGE_GB)
+   {
+      if (gbSgbMode && gbSgbMultiplayer)
+      {
+         joybuf[1] = updateJoypad(1);
+         if (gbSgbFourPlayers)
+         {
+            joybuf[2] = updateJoypad(2);
+            joybuf[3] = updateJoypad(3);
+         }
+      }
+   }
+
    has_frame = 0;
-   core->emuMain(core->emuCount);
+   core->emuMain(core->emuCount, joybuf);
    video_cb(has_frame ? pix : NULL, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
 
    int soundlen = core->emuFlushAudio(soundbuf);
@@ -1444,10 +1570,10 @@ static void update_input_descriptors(void)
    { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "D-Pad Up" },    \
    { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "D-Pad Down" },  \
    { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "D-Pad Right" }, \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "B" },           \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "A" },           \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,      "Turbo B" },     \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,      "Turbo A" },     \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "A" },           \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "B" },           \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,      "Turbo A" },     \
+   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,      "Turbo B" },     \
    { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },      \
    { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Start" },
 
@@ -1456,7 +1582,7 @@ static void update_input_descriptors(void)
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R, "R" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2, "Solar Sensor (Darker)" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2, "Solar Sensor (Lighter)" },
-      INPUT_JOY(0)      
+      INPUT_JOY(0)
       { 0, 0, 0, 0, NULL },
    };
 
@@ -1776,55 +1902,7 @@ void systemMessage(int, const char *fmt, ...)
 
 uint32_t systemReadJoypad(int which)
 {
-   uint32_t J = 0;
-
-   if (which == -1)
-      which = 0;
-
-   if (retropad_device[which] == RETRO_DEVICE_JOYPAD)
-   {
-      for (int i = 0; i < MAX_BUTTONS; i++)
-         J |= input_cb(which, RETRO_DEVICE_JOYPAD, 0, binds[i]) << i;
-
-      if (option_turboEnable)
-      {
-         /* Handle Turbo A & B buttons */
-         for (int j = 0; j < TURBO_BUTTONS; j++)
-         {
-            if (input_cb(which, RETRO_DEVICE_JOYPAD, 0, turbo_binds[j]))
-            {
-               turbo_pressed[which] = true;
-               if (turbo_delay_counter[which] == 0)
-                  J |= 1 << j;
-            }
-         }
-
-         // if turbo buttons was pressed, start turbo counter
-         if (turbo_pressed[which])
-         {
-            turbo_delay_counter[which]++;
-
-            // Reset the toggle if delay value is reached
-            if (turbo_delay_counter[which] > option_turboDelay)
-               turbo_delay_counter[which] = 0;
-         }
-
-         // just reset pressed state and counter if no turbo buttons were pressed
-         else
-         {
-            turbo_delay_counter[which] = 0;
-            turbo_pressed[which] = false;
-         }
-      }
-   }
-
-   // Do not allow opposing directions
-   if ((J & 0x30) == 0x30)
-      J &= ~(0x30);
-   else if ((J & 0xC0) == 0xC0)
-      J &= ~(0xC0);
-
-   return J;
+   return 0;
 }
 
 static void systemUpdateSolarSensor(int v)
