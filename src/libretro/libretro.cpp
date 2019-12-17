@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "SoundRetro.h"
 #include "libretro.h"
+#include "SoundRetro.h"
+#include "libretro_input.h"
 #include "libretro_core_options.h"
 #include "scrc32.h"
 
@@ -40,16 +41,11 @@
 // just provide enough audio buffer size
 #define SOUND_BUFFER_SIZE 4096
 
-#define MAX_PLAYERS   4
-#define MAX_BUTTONS   10
-#define TURBO_BUTTONS 2
-
 static retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
 static retro_input_poll_t poll_cb;
 static retro_input_state_t input_cb;
 static retro_environment_t environ_cb;
-static retro_set_rumble_state_t rumble_cb;
 retro_audio_sample_batch_t audio_batch_cb;
 
 static char retro_system_directory[2048];
@@ -60,32 +56,26 @@ static bool can_dupe = false;
 static bool libretro_supports_bitmasks = false;
 
 // core options
-static bool option_useBios = false;
-static bool option_colorizerHack = false;
-static bool option_forceRTCenable = false;
+static bool option_useBios             = false;
+static bool option_colorizerHack       = false;
+static bool option_forceRTCenable      = false;
 static bool option_showAdvancedOptions = false;
-static unsigned option_gbPalette = 0;
+static unsigned option_gbPalette       = 0;
+static double option_sndFiltering      = 0.5;
+static bool option_sndInterpolation    = true;
+bool option_turboEnable                = false;
+unsigned option_turboDelay             = 3;
+int option_analogDeadzone              = 0;
+int option_gyroSensitivity             = 0;
+int option_tiltSensitivity             = 0;
+bool option_swapAnalogSticks           = false;
 
-static double option_sndFiltering = 0.5;
-static bool option_sndInterpolation = true;
-
-static bool option_turboEnable = false;
-static unsigned option_turboDelay = 3;
-
-static int option_analogDeadzone = 0;
-static int option_gyroSensitivity = 0;
-static int option_tiltSensitivity = 0;
-static bool option_swapAnalogSticks = false;
-
-static uint8_t sensorDarkness = 0xE8;
-static uint8_t sensorDarknessLevel = 0; // so we can adjust sensor from gamepad
-
-static unsigned turbo_delay_counter[MAX_PLAYERS] = { 0 };
-static unsigned retropad_device[4] = { 0 };
-
-static unsigned systemWidth = GBA_WIDTH;
+static unsigned systemWidth  = GBA_WIDTH;
 static unsigned systemHeight = GBA_HEIGHT;
-static EmulatedSystem *core = NULL;
+static EmulatedSystem *core  = NULL;
+
+uint16_t input_buf[4]  = { 0 };
+unsigned input_type[4] = { 0 };
 
 // global vars
 uint16_t systemColorMap16[0x10000];
@@ -473,8 +463,6 @@ static void gb_init(void)
 
 // GBA
 
-static void systemUpdateSolarSensor(int level);
-
 typedef struct
 {
    const char *romtitle;
@@ -626,327 +614,6 @@ static void gba_init(void)
    CPUReset();
 }
 
-// System analog stick range is -0x7fff to 0x7fff
-// Implementation from mupen64plus-libretro
-#include <math.h>
-#define ROUND(x)   floor((x) + 0.5)
-#define ASTICK_MAX 0x8000
-static int analog_x, analog_y, analog_z;
-
-static void updateInput_MotionSensors(void)
-{
-   int16_t analog[3], astick_data[3];
-   double scaled_range, radius, angle;
-   unsigned tilt_retro_device_index = option_swapAnalogSticks ? RETRO_DEVICE_INDEX_ANALOG_LEFT : RETRO_DEVICE_INDEX_ANALOG_RIGHT;
-   unsigned gyro_retro_device_index = option_swapAnalogSticks ? RETRO_DEVICE_INDEX_ANALOG_RIGHT : RETRO_DEVICE_INDEX_ANALOG_LEFT;
-
-   // Tilt sensor section
-   analog[0] = input_cb(0, RETRO_DEVICE_ANALOG,
-       tilt_retro_device_index, RETRO_DEVICE_ID_ANALOG_X);
-   analog[1] = input_cb(0, RETRO_DEVICE_ANALOG,
-       tilt_retro_device_index, RETRO_DEVICE_ID_ANALOG_Y);
-
-   // Convert cartesian coordinate analog stick to polar coordinates
-   radius = sqrt(analog[0] * analog[0] + analog[1] * analog[1]);
-   angle = atan2(analog[1], analog[0]);
-
-   if (radius > option_analogDeadzone)
-   {
-      // Re-scale analog stick range to negate deadzone (makes slow movements possible)
-      radius = (radius - option_analogDeadzone) * ((float)ASTICK_MAX / (ASTICK_MAX - option_analogDeadzone));
-      // Tilt sensor range is from  from 1897 to 2197
-      radius *= 150.0 / ASTICK_MAX * (option_tiltSensitivity / 100.0);
-      // Convert back to cartesian coordinates
-      astick_data[0] = +(int16_t)ROUND(radius * cos(angle));
-      astick_data[1] = -(int16_t)ROUND(radius * sin(angle));
-   }
-   else
-      astick_data[0] = astick_data[1] = 0;
-
-   analog_x = astick_data[0];
-   analog_y = astick_data[1];
-
-   // Gyro sensor section
-   analog[2] = input_cb(0, RETRO_DEVICE_ANALOG,
-       gyro_retro_device_index, RETRO_DEVICE_ID_ANALOG_X);
-
-   if (analog[2] < -option_analogDeadzone)
-   {
-      // Re-scale analog stick range
-      scaled_range = (-analog[2] - option_analogDeadzone) * ((float)ASTICK_MAX / (ASTICK_MAX - option_analogDeadzone));
-      // Gyro sensor range is +/- 1800
-      scaled_range *= 1800.0 / ASTICK_MAX * (option_gyroSensitivity / 100.0);
-      astick_data[2] = -(int16_t)ROUND(scaled_range);
-   }
-   else if (analog[2] > option_analogDeadzone)
-   {
-      scaled_range = (analog[2] - option_analogDeadzone) * ((float)ASTICK_MAX / (ASTICK_MAX - option_analogDeadzone));
-      scaled_range *= (1800.0 / ASTICK_MAX * (option_gyroSensitivity / 100.0));
-      astick_data[2] = +(int16_t)ROUND(scaled_range);
-   }
-   else
-      astick_data[2] = 0;
-
-   analog_z = astick_data[2];
-}
-
-// Update solar sensor level by gamepad buttons, default L2/R2
-static void updateInput_SolarSensor(void)
-{
-   static bool buttonpressed = false;
-
-   if (buttonpressed)
-   {
-      buttonpressed = input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2) || input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2);
-   }
-   else
-   {
-      if (input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2))
-      {
-         sensorDarknessLevel++;
-         if (sensorDarknessLevel > 10)
-            sensorDarknessLevel = 10;
-         systemUpdateSolarSensor(sensorDarknessLevel);
-         buttonpressed = true;
-      }
-      else if (input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2))
-      {
-         if (sensorDarknessLevel)
-            sensorDarknessLevel--;
-         systemUpdateSolarSensor(sensorDarknessLevel);
-         buttonpressed = true;
-      }
-   }
-}
-
-// is rumble requested?
-static bool rumble_state;
-
-// delay in frames to turn off rumble effect since last enabled
-static unsigned rumble_offtimer;
-
-static void updateRumbleState()
-{
-   // if rumble is requested, reset timer
-   if (rumble_state)
-      rumble_offtimer = 5; // delay for 4 frames
-   // TODO: Update rumble strength based on how many ON request
-}
-
-static void updateRumble()
-{
-   if (!rumble_cb) return;
-   int rumble = rumble_offtimer ? 0xFFFF : 0;
-   rumble_cb(0, RETRO_RUMBLE_STRONG, rumble);
-   rumble_cb(0, RETRO_RUMBLE_WEAK, rumble);
-   if (rumble_offtimer) --rumble_offtimer;
-}
-
-static void input_update_turbo_counter(int which, bool *pressed_state)
-{
-   // if turbo buttons was pressed, start turbo counter
-   if (pressed_state[0] || pressed_state[1])
-   {
-      turbo_delay_counter[which]++;
-      // Reset the toggle if delay value is reached
-      if (turbo_delay_counter[which] > option_turboDelay)
-         turbo_delay_counter[which] = 0;
-   }
-   // just reset pressed state and counter if no turbo buttons were pressed
-   else
-      turbo_delay_counter[which] = 0;
-}
-
-static uint16_t updateJoypad(unsigned which)
-{
-   static const unsigned binds[MAX_BUTTONS] = {
-      RETRO_DEVICE_ID_JOYPAD_A,
-      RETRO_DEVICE_ID_JOYPAD_B,
-      RETRO_DEVICE_ID_JOYPAD_SELECT,
-      RETRO_DEVICE_ID_JOYPAD_START,
-      RETRO_DEVICE_ID_JOYPAD_RIGHT,
-      RETRO_DEVICE_ID_JOYPAD_LEFT,
-      RETRO_DEVICE_ID_JOYPAD_UP,
-      RETRO_DEVICE_ID_JOYPAD_DOWN,
-      RETRO_DEVICE_ID_JOYPAD_R,
-      RETRO_DEVICE_ID_JOYPAD_L
-   };
-
-   static const unsigned turbo_binds[TURBO_BUTTONS] = {
-      RETRO_DEVICE_ID_JOYPAD_X,
-      RETRO_DEVICE_ID_JOYPAD_Y
-   };
-
-   uint16_t J = 0;
-
-   if (retropad_device[which] == RETRO_DEVICE_JOYPAD)
-   {
-      bool turbo_pressed[2] = {0};
-      if (libretro_supports_bitmasks)
-      {
-         uint16_t ret = input_cb(which, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-
-         // handle normal buttons
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_B))
-            J |= JOY_B;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_SELECT))
-            J |= JOY_SELECT;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_START))
-            J |= JOY_START;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_UP))
-            J |= JOY_UP;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_DOWN))
-            J |= JOY_DOWN;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_LEFT))
-            J |= JOY_LEFT;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_RIGHT))
-            J |= JOY_RIGHT;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_A))
-            J |= JOY_A;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_L))
-            J |= JOY_L;
-         if (ret & BIT(RETRO_DEVICE_ID_JOYPAD_R))
-            J |= JOY_R;
-
-         // handle turbo button mode
-         if (option_turboEnable)
-         {
-            // Handle Turbo A & B buttons
-            for (unsigned j = 0; j < TURBO_BUTTONS; j++)
-            {
-               if (ret & BIT(turbo_binds[j]))
-               {
-                  turbo_pressed[j] = true;
-                  if (turbo_delay_counter[which] == 0)
-                     J |= (JOY_A + j);
-                  else
-                     J &= ~(JOY_A + j);
-               }
-               else
-                  turbo_pressed[j] = false;
-            }
-
-            input_update_turbo_counter(which, turbo_pressed);
-         }
-      }
-      else
-      {
-         for (int i = 0; i < MAX_BUTTONS; i++)
-            J |= input_cb(which, RETRO_DEVICE_JOYPAD, 0, binds[i]) << i;
-
-         if (option_turboEnable)
-         {
-            // Handle Turbo A & B buttons
-            for (int j = 0; j < TURBO_BUTTONS; j++)
-            {
-               if (input_cb(which, RETRO_DEVICE_JOYPAD, 0, turbo_binds[j]))
-               {
-                  turbo_pressed[j] = true;
-                  if (turbo_delay_counter[which] == 0)
-                     J |= (JOY_A + j);
-               }
-               else
-                  turbo_pressed[j] = false;
-            }
-
-            input_update_turbo_counter(which, turbo_pressed);
-         }
-      }
-   }
-
-   // Do not allow opposing directions
-   if ((J & (JOY_UP | JOY_DOWN)) == (JOY_UP | JOY_DOWN))
-      J &= ~(JOY_UP | JOY_DOWN);
-   else if ((J & (JOY_LEFT | JOY_RIGHT)) == (JOY_LEFT | JOY_RIGHT))
-      J &= ~(JOY_LEFT | JOY_RIGHT);
-
-   return J;
-}
-
-static void update_input_descriptors(void)
-{
-#define INPUT_JOY(port)                                                            \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,   "D-Pad Left" },    \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "D-Pad Up" },    \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "D-Pad Down" },  \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "D-Pad Right" }, \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "A" },           \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "B" },           \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,      "Turbo A" },     \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,      "Turbo B" },     \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },      \
-   { port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Start" },
-
-   static struct retro_input_descriptor input_gba[] = {
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "L" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "R" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Solar Sensor (Darker)" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Solar Sensor (Lighter)" },
-      INPUT_JOY(0)
-      { 0, 0, 0, 0, NULL },
-   };
-
-   static struct retro_input_descriptor input_gb[] = {
-      INPUT_JOY(0)
-      { 0, 0, 0, 0, NULL },
-   };
-
-   static struct retro_input_descriptor input_sgb[] = {
-      INPUT_JOY(0)
-      INPUT_JOY(1)
-      INPUT_JOY(2)
-      INPUT_JOY(3)
-      { 0, 0, 0, 0, NULL },
-   };
-
-   static const struct retro_controller_description port_gba[] = {
-      { "GBA Joypad", RETRO_DEVICE_JOYPAD },
-      { NULL, 0 },
-   };
-
-   static const struct retro_controller_description port_gb[] = {
-      { "GB Joypad", RETRO_DEVICE_JOYPAD },
-      { NULL, 0 },
-   };
-
-   static const struct retro_controller_info ports_gba[] = {
-      { port_gba, 1 },
-      { NULL, 0 }
-   };
-
-   static const struct retro_controller_info ports_gb[] = {
-      { port_gb, 1 },
-      { NULL, 0 }
-   };
-
-   static const struct retro_controller_info ports_sgb[] = {
-      { port_gb, 1 },
-      { port_gb, 1 },
-      { port_gb, 1 },
-      { port_gb, 1 },
-      { NULL, 0 }
-   };
-
-   if (core->type == IMAGE_GB)
-   {
-      if (gbSgbMode)
-      {
-         environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports_sgb);
-         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, input_sgb);
-      }
-      else
-      {
-         environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports_gb);
-         environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, input_gb);
-      }
-   }
-   else if (core->type == IMAGE_GBA)
-   {
-      environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports_gba);
-      environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, input_gba);
-   }
-}
-
 static void update_variables(bool startup)
 {
    struct retro_variable var = { 0 };
@@ -1037,8 +704,8 @@ static void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      sensorDarknessLevel = atoi(var.value);
-      systemUpdateSolarSensor(sensorDarknessLevel);
+      int newval = atoi(var.value);
+      update_input_solar_sensor(newval);
    }
 
    var.key = "vbam_showborders";
@@ -1288,7 +955,6 @@ RETRO_API void retro_set_input_state(retro_input_state_t cb)
 RETRO_API void retro_init(void)
 {
    struct retro_log_callback log;
-   struct retro_rumble_interface rumble;
 
    environ_cb(RETRO_ENVIRONMENT_GET_CAN_DUPE, &can_dupe);
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
@@ -1320,11 +986,6 @@ RETRO_API void retro_init(void)
 
    bool yes = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &yes);
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble))
-      rumble_cb = rumble.set_rumble_state;
-   else
-      rumble_cb = NULL;
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
       libretro_supports_bitmasks = true;
@@ -1386,7 +1047,7 @@ RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device)
 {
    if (port > 3) return;
 
-   retropad_device[port] = device;
+   input_type[port] = device;
    log_cb(RETRO_LOG_INFO, "Controller %d device: %d\n", port + 1, device);
 }
 
@@ -1421,30 +1082,10 @@ RETRO_API void retro_run(void)
 
    poll_cb();
 
-   if (hardware & HW_SOLAR_SENSOR)
-      updateInput_SolarSensor();
-   if (hardware & HW_TILT || hardware & HW_GYRO)
-      updateInput_MotionSensors();
-   if (hardware & HW_RUMBLE)
-      updateRumble();
-
-   uint16_t joybuf[4];
-   joybuf[0] = updateJoypad(0);
-   if (core->type == IMAGE_GB)
-   {
-      if (gbSgbMode && gbSgbMultiplayer)
-      {
-         joybuf[1] = updateJoypad(1);
-         if (gbSgbFourPlayers)
-         {
-            joybuf[2] = updateJoypad(2);
-            joybuf[3] = updateJoypad(3);
-         }
-      }
-   }
+   update_input(libretro_supports_bitmasks, input_cb);
 
    has_frame = 0;
-   core->emuMain(core->emuCount, joybuf);
+   core->emuMain(core->emuCount, input_buf);
    video_cb(has_frame ? pix : NULL, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
 
    int soundlen = core->emuFlushAudio(soundbuf);
@@ -1480,7 +1121,10 @@ RETRO_API void retro_cheat_reset(void)
 }
 
 #define ISHEXDEC \
-   ((code[cursor] >= '0') && (code[cursor] <= '9')) || ((code[cursor] >= 'a') && (code[cursor] <= 'f')) || ((code[cursor] >= 'A') && (code[cursor] <= 'F')) || (code[cursor] == '-')
+   ((code[cursor] >= '0') && (code[cursor] <= '9')) || \
+   ((code[cursor] >= 'a') && (code[cursor] <= 'f')) || \
+   ((code[cursor] >= 'A') && (code[cursor] <= 'F')) || \
+   (code[cursor] == '-')
 
 RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
@@ -1742,7 +1386,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
    if (!core)
       return false;
 
-   update_input_descriptors(); // Initialize input descriptors and info
+   update_input_descriptors(core, environ_cb); // Initialize input descriptors and info
    update_variables(false);
    uint8_t *state_buf = (uint8_t *)malloc(2000000);
    serialize_size = core->emuWriteState(state_buf, 2000000);
@@ -1909,85 +1553,33 @@ uint32_t systemReadJoypad(int which)
    return 0;
 }
 
-static void systemUpdateSolarSensor(int v)
-{
-   int value = 0;
-   switch (v)
-   {
-   case 1: value = 0x06; break;
-   case 2: value = 0x0E; break;
-   case 3: value = 0x18; break;
-   case 4: value = 0x20; break;
-   case 5: value = 0x28; break;
-   case 6: value = 0x38; break;
-   case 7: value = 0x48; break;
-   case 8: value = 0x60; break;
-   case 9: value = 0x78; break;
-   case 10: value = 0x98; break;
-   default: break;
-   }
-
-   sensorDarkness = 0xE8 - value;
-}
-
 bool systemReadJoypads(void)
 {
    return true;
 }
 
-static int sensor_tilt[2], sensor_gyro;
-
 int systemGetSensorX()
 {
-   return sensor_tilt[0];
+   return get_sensor_tilt_x();
 }
 
 int systemGetSensorY()
 {
-   return sensor_tilt[1];
+   return get_sensor_tilt_y();
 }
 
 int systemGetSensorZ()
 {
-   return sensor_gyro / 10;
+   return get_sensor_gyro() / 10;
 }
 
 uint8_t systemGetSensorDarkness(void)
 {
-   return sensorDarkness;
+   return get_sensor_solar();
 }
 
 void systemUpdateMotionSensor(void)
 {
-   // Max ranges as set in VBAM
-   static const int tilt_max = 2197;
-   static const int tilt_min = 1897;
-   static const int tilt_center = 2047;
-   static const int gyro_thresh = 1800;
-
-   if (!sensor_tilt[0])
-      sensor_tilt[0] = tilt_center;
-
-   if (!sensor_tilt[1])
-      sensor_tilt[1] = tilt_center;
-
-   sensor_tilt[0] = (-analog_x) + tilt_center;
-   if (sensor_tilt[0] > tilt_max)
-      sensor_tilt[0] = tilt_max;
-   else if (sensor_tilt[0] < tilt_min)
-      sensor_tilt[0] = tilt_min;
-
-   sensor_tilt[1] = analog_y + tilt_center;
-   if (sensor_tilt[1] > tilt_max)
-      sensor_tilt[1] = tilt_max;
-   else if (sensor_tilt[1] < tilt_min)
-      sensor_tilt[1] = tilt_min;
-
-   sensor_gyro = analog_z;
-   if (sensor_gyro > gyro_thresh)
-      sensor_gyro = gyro_thresh;
-   else if (sensor_gyro < -gyro_thresh)
-      sensor_gyro = -gyro_thresh;
 }
 
 void systemCartridgeRumble(bool e)
@@ -1995,8 +1587,7 @@ void systemCartridgeRumble(bool e)
    if (!(hardware & HW_RUMBLE))
       return;
 
-   rumble_state = e;
-   updateRumbleState();
+   update_input_rumble_state(e);
 }
 
 bool systemPauseOnFrame(void)

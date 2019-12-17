@@ -1,5 +1,8 @@
+SOURCES_C       :=
+SOURCES_CXX     :=
 LIBRETRO_COMMON := $(CORE_DIR)/libretro/libretro-common
 INCFLAGS        := -I$(CORE_DIR) -I$(CORE_DIR)/gba -I$(CORE_DIR)/gb -I$(CORE_DIR)/apu -I$(CORE_DIR)/common -I$(LIBRETRO_COMMON)/include
+
 VBA_DEFINES     := -D__LIBRETRO__ -DFINAL_VERSION
 
 ifeq ($(TILED_RENDERING), 1)
@@ -14,9 +17,9 @@ ifeq ($(NO_LINK),1)
 VBA_DEFINES += -DNO_LINK
 endif
 
-SOURCES_CXX :=
 SOURCES_CXX += \
 	$(CORE_DIR)/libretro/libretro.cpp \
+	$(CORE_DIR)/libretro/libretro_input.cpp \
 	$(CORE_DIR)/libretro/UtilRetro.cpp \
 	$(CORE_DIR)/libretro/SoundRetro.cpp
 
