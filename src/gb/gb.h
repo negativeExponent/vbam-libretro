@@ -1,10 +1,10 @@
 #ifndef GB_H
 #define GB_H
 
-#define gbWidth   160
-#define gbHeight  144
-#define sgbWidth  256
-#define sgbHeight 224
+#define GB_WIDTH   160
+#define GB_HEIGHT  144
+#define SGB_WIDTH  256
+#define SGB_HEIGHT 224
 
 const int GB_C_FLAG = 0x10;
 const int GB_H_FLAG = 0x20;

@@ -3864,6 +3864,8 @@ bool gbWriteBatteryFile(const char*)
 }
 
 struct EmulatedSystem GBSystem = {
+   // System Type
+   IMAGE_GB,
    // emuMain
    gbEmulate,
    // emuReset

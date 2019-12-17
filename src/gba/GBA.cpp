@@ -2557,6 +2557,8 @@ void CPULoop(int ticks, uint16_t *joybuf)
 }
 
 struct EmulatedSystem GBASystem = {
+   // System Type
+   IMAGE_GBA,
    // emuMain
    CPULoop,
    // emuReset

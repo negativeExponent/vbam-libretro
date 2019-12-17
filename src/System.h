@@ -18,6 +18,8 @@ class SoundDriver;
 
 struct EmulatedSystem
 {
+   // System type
+   int type;
    // main emulation function
    void (*emuMain)(int, uint16_t*);
    // reset emulator
@@ -48,7 +50,6 @@ struct EmulatedSystem
    bool emuHasDebugger;
    // clock ticks to emulate
    int emuCount;
-
 };
 
 enum gba_hardware
