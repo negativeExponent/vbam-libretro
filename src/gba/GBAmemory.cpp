@@ -635,6 +635,7 @@ uint32_t CPUReadHalfWord(uint32_t address)
       case 4:
          if ((address < 0x4000400) && ioReadable[address & 0x3FE])
          {
+            value = READ16LE(ioMem + (address & 0x3FE));
             if ((address & 0xFF0) == 0x100)
             {
                switch (address & 0x10F)
@@ -664,10 +665,6 @@ uint32_t CPUReadHalfWord(uint32_t address)
                      }
                      break;
                }
-            }
-            else
-            {
-               value = READ16LE(ioMem + (address & 0x3FE));
             }
          }
          else if ((address < 0x4000400) && ioReadable[address & 0x3FC])
