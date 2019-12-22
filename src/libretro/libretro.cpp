@@ -1243,58 +1243,84 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 
       gba_init();
 
-      desc[0].start = 0x03000000;
-      desc[0].select = 0xFF000000;
-      desc[0].len = 0x8000;
-      desc[0].ptr = internalRAM; //fast WRAM
-      desc[1].start = 0x02000000;
-      desc[1].select = 0xFF000000;
-      desc[1].len = 0x40000;
-      desc[1].ptr = workRAM; //slow WRAM
-      /* TODO: if SRAM is flash, use start=0 addrspace="S" instead */
-      desc[2].start = 0x0E000000;
-      desc[2].select = 0;
-      desc[2].len = flashSize;
-      desc[2].ptr = flashSaveMemory; //SRAM
-      desc[3].start = 0x08000000;
-      desc[3].select = 0;
-      desc[3].len = romSize;
-      desc[3].ptr = rom; //ROM
-      desc[3].flags = RETRO_MEMDESC_CONST;
-      desc[4].start = 0x0A000000;
-      desc[4].select = 0;
-      desc[4].len = romSize;
-      desc[4].ptr = rom; //ROM mirror 1
-      desc[4].flags = RETRO_MEMDESC_CONST;
-      desc[5].start = 0x0C000000;
-      desc[5].select = 0;
-      desc[5].len = romSize;
-      desc[5].ptr = rom; //ROM mirror 2
-      desc[5].flags = RETRO_MEMDESC_CONST;
-      desc[6].start = 0x00000000;
-      desc[6].select = 0;
-      desc[6].len = 0x4000;
-      desc[6].ptr = bios; //BIOS
-      desc[6].flags = RETRO_MEMDESC_CONST;
-      desc[7].start = 0x06000000;
-      desc[7].select = 0xFF000000;
-      desc[7].len = 0x18000;
-      desc[7].ptr = vram; //VRAM
-      desc[8].start = 0x05000000;
-      desc[8].select = 0xFF000000;
-      desc[8].len = 0x400;
-      desc[8].ptr = paletteRAM; //palettes
-      desc[9].start = 0x07000000;
-      desc[9].select = 0xFF000000;
-      desc[9].len = 0x400;
-      desc[9].ptr = oam; //OAM
-      desc[10].start = 0x04000000;
-      desc[10].select = 0;
-      desc[10].len = 0x400;
-      desc[10].ptr = ioMem; //bunch of registers
+      unsigned i = 0;
+
+      desc[i].start     = 0x03000000;
+      desc[i].len       = 0x8000;
+      desc[i].ptr       = internalRAM;
+      desc[i].addrspace = "IWRAM";
+      i++;
+
+      desc[i].start     = 0x02000000;
+      desc[i].len       = 0x40000;
+      desc[i].ptr       = workRAM;
+      desc[i].addrspace = "EWRAM";
+      i++;
+
+      if (cpuSramEnabled || cpuFlashEnabled)
+      {
+         desc[i].start     = 0x0E000000;
+         desc[i].len       = flashSize;
+         desc[i].ptr       = flashSaveMemory;
+         desc[i].addrspace = cpuSramEnabled ? "SRAM" : "FLASH";
+         i++;
+      }
+
+      desc[i].start     = 0x00000000;
+      desc[i].len       = 0x4000;
+      desc[i].ptr       = bios;
+      desc[i].flags     = RETRO_MEMDESC_CONST;
+      desc[i].addrspace = "BIOS";
+      i++;
+
+      desc[i].start     = 0x04000000;
+      desc[i].len       = 0x400;
+      desc[i].ptr       = ioMem;
+      desc[i].addrspace = "IOREG";
+      i++;
+
+      desc[i].start     = 0x05000000;
+      desc[i].len       = 0x400;
+      desc[i].ptr       = paletteRAM;
+      desc[i].addrspace = "PRAM";
+      i++;
+
+      desc[i].start     = 0x06000000;
+      desc[i].select    = 0xFF000000;
+      desc[i].len       = 0x18000;
+      desc[i].ptr       = vram;
+      desc[i].addrspace = "VRAM";
+      i++;
+
+      desc[i].start     = 0x07000000;
+      desc[i].len       = 0x400;
+      desc[i].ptr       = oam;
+      desc[i].addrspace = "OAM";
+      i++;
+
+      desc[i].start     = 0x08000000;
+      desc[i].len       = romSize;
+      desc[i].ptr       = rom;
+      desc[i].flags     = RETRO_MEMDESC_CONST;
+      desc[i].addrspace = "ROMWAIT0";
+      i++;
+
+      desc[i].start     = 0x0A000000;
+      desc[i].len       = romSize;
+      desc[i].ptr       = rom;
+      desc[i].flags     = RETRO_MEMDESC_CONST;
+      desc[i].addrspace = "ROMWAIT1";
+      i++;
+
+      desc[i].start     = 0x0C000000;
+      desc[i].len       = romSize;
+      desc[i].ptr       = rom;
+      desc[i].flags     = RETRO_MEMDESC_CONST;
+      desc[i].addrspace = "ROMWAIT2";
+      i++;
 
       retromap.descriptors = desc;
-      retromap.num_descriptors = 11;
+      retromap.num_descriptors = i;
       environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &retromap);
    }
 
@@ -1333,48 +1359,50 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
       // http://gameboy.mongenel.com/dmg/asmmemmap.html
 
       unsigned i = 0;
-      for (unsigned addr = 0; addr < 16; addr++)
-      {
-         if (addr == 13) continue;
-         if (addr == 14) continue;
-         if (addr == 12)
-         { // WRAM, bank 0-1
-            if (!gbCgbMode)
-            { // WRAM-GB
-               if (!gbMemory) continue;
-               desc[i].ptr = gbMemory + 0xC000;
-            }
-            else
-            { // WRAM GBC
-               if (!gbWram) continue;
-               desc[i].ptr = gbWram;
-            }
-            desc[i].start = addr * 0x1000;
-            desc[i].len = 0x2000;
-            i++;
-            continue;
-         }
-         else
-         { // Everything else map
-            if (gbMemoryMap[addr])
-            {
-               desc[i].ptr = gbMemoryMap[addr];
-               desc[i].start = addr * 0x1000;
-               desc[i].len = 0x1000;
-               if (addr < 4)
-                  desc[i].flags = RETRO_MEMDESC_CONST;
-               i++;
-            }
-         }
-      }
+
+      desc[i].ptr       = gbCgbMode ? gbWram : gbMemory;
+      desc[i].offset    = gbCgbMode ? 0 : 0xC000;
+      desc[i].len       = GB_SIZE_WRAM_BANK0 + GB_SIZE_WRAM_BANK1;
+      desc[i].start     = 0xC000;
+      desc[i].addrspace = "WRAM";
+      i++;
+
+      bool useRam       = gbRamSize && gbRam;
+      desc[i].ptr       = useRam ? gbRam : gbMemory;
+      desc[i].offset    = useRam ? 0 : 0xA000;
+      desc[i].len       = useRam ? gbRamSize : GB_SIZE_EXTERNAL_RAM;
+      desc[i].start     = 0xA000;
+      desc[i].addrspace = "ERAM";
+      i++;
+
+      desc[i].start     = 0x0000;
+      desc[i].len       = std::min<int>(gbRomSize, 0x8000);
+      desc[i].ptr       = gbRom;
+      desc[i].addrspace = "ROM";
+      i++;
+
+      desc[i].ptr       = gbCgbMode ? gbVram : gbMemory;
+      desc[i].offset    = gbCgbMode ? 0 : 0x8000;
+      desc[i].len       = GB_SIZE_VRAM;
+      desc[i].start     = 0x8000;
+      desc[i].addrspace = "VRAM";
+      i++;
+
+      desc[i].ptr       = gbMemory;
+      desc[i].offset    = 0xF000;
+      desc[i].len       = 0x1000;
+      desc[i].start     = 0xF000;
+      desc[i].addrspace = "OTHERS";
+      i++;
 
       if (gbWram && gbCgbMode)
-      { // banks 2-7 of GBC work ram banks at $10000
-         desc[i].ptr = gbWram;
+      { 
+         // banks 2-7 of GBC work ram banks at $10000
+         desc[i].ptr    = gbWram;
          desc[i].offset = 0x2000;
-         desc[i].start = 0x10000;
+         desc[i].start  = 0x10000;
          desc[i].select = 0xFFFFA000;
-         desc[i].len = 0x6000;
+         desc[i].len    = 0x6000;
          i++;
       }
 
