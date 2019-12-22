@@ -44,7 +44,6 @@ else ifneq ($(findstring MINGW,$(shell uname -a)),)
 endif
 
 CORE_DIR     := ..
-LIBRETRO_DIR := $(CORE_DIR)/libretro
 TARGET_NAME  := vbam
 
 VBAM_VERSION   := $(shell sed -En 's/.*\[([0-9]+[^]]+).*/\1/p; T; q' ../../CHANGELOG.md 2>/dev/null)
@@ -60,7 +59,7 @@ endif
 ifneq (,$(findstring unix,$(platform)))
 	TARGET := $(TARGET_NAME)_libretro.so
 	fpic := -fPIC
-	SHARED := -shared -Wl,-version-script=$(LIBRETRO_DIR)/link.T -Wl,-no-undefined
+	SHARED := -shared -Wl,-version-script=link.T -Wl,-no-undefined
 	TILED_RENDERING=1
 
 # Classic Platforms ####################
@@ -72,7 +71,7 @@ ifneq (,$(findstring unix,$(platform)))
 else ifeq ($(platform), classic_armv7_a7)
 	TARGET := $(TARGET_NAME)_libretro.so
 	fpic := -fPIC
-	SHARED := -shared -Wl,--version-script=$(LIBRETRO_DIR)/link.T -Wl,--no-undefined -fPIC
+	SHARED := -shared -Wl,--version-script=link.T -Wl,--no-undefined -fPIC
 	CFLAGS += -Ofast \
 	-flto=4 -fwhole-program -fuse-linker-plugin \
 	-fdata-sections -ffunction-sections -Wl,--gc-sections \
@@ -90,13 +89,13 @@ else ifeq ($(platform), classic_armv7_a7)
 	USE_DYNAREC=1
 	TILED_RENDERING=1
 	ifeq ($(shell echo `$(CC) -dumpversion` "< 4.9" | bc -l), 1)
-	  CFLAGS += -march=armv7-a
+		CFLAGS += -march=armv7-a
 	else
-	  CFLAGS += -march=armv7ve
-	  # If gcc is 5.0 or later
-	  ifeq ($(shell echo `$(CC) -dumpversion` ">= 5" | bc -l), 1)
-	    LDFLAGS += -static-libgcc -static-libstdc++
-	  endif
+		CFLAGS += -march=armv7ve
+		# If gcc is 5.0 or later
+		ifeq ($(shell echo `$(CC) -dumpversion` ">= 5" | bc -l), 1)
+			LDFLAGS += -static-libgcc -static-libstdc++
+		endif
 	endif
 
 # (armv8 a35, hard point, neon based) ###
@@ -118,13 +117,13 @@ else ifeq ($(platform), classic_armv8_a35)
 	HAVE_NEON=1
 	ARCH = arm
 	ifeq ($(shell echo `$(CC) -dumpversion` "< 4.9" | bc -l), 1)
-	  CFLAGS += -march=armv8-a
+		CFLAGS += -march=armv8-a
 	else
-	  CFLAGS += -march=armv8-a
-	  # If gcc is 5.0 or later
-	  ifeq ($(shell echo `$(CC) -dumpversion` ">= 5" | bc -l), 1)
-	    LDFLAGS += -static-libgcc -static-libstdc++
-	  endif
+		CFLAGS += -march=armv8-a
+		# If gcc is 5.0 or later
+		ifeq ($(shell echo `$(CC) -dumpversion` ">= 5" | bc -l), 1)
+			LDFLAGS += -static-libgcc -static-libstdc++
+	  	endif
 	endif
 #######################################
 
@@ -133,8 +132,8 @@ else ifeq ($(platform), osx)
 	TARGET := $(TARGET_NAME)_libretro.dylib
 	fpic := -fPIC
 	ifeq ($(arch),ppc)
-	  ENDIANNESS_DEFINES += -DMSB_FIRST
-	  PLATFORM_DEFINES := -D__POWERPC__ -D__ppc__
+	  	ENDIANNESS_DEFINES += -DMSB_FIRST
+	  	PLATFORM_DEFINES := -D__POWERPC__ -D__ppc__
 	endif
 	OSXVER = `sw_vers -productVersion | cut -d. -f 2`
 	OSX_LT_MAVERICKS = `(( $(OSXVER) <= 9)) && echo "YES"`
@@ -148,24 +147,24 @@ else ifneq (,$(findstring ios,$(platform)))
 	fpic := -fPIC
 	SHARED := -dynamiclib
 	ifeq ($(IOSSDK),)
-	  IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
+		IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
 	endif
 	ifeq ($(platform),ios-arm64)
-	  CC = cc -arch arm64 -isysroot $(IOSSDK)
-	  CXX = clang++ -arch arm64 -isysroot $(IOSSDK)
+		CC = cc -arch arm64 -isysroot $(IOSSDK)
+		CXX = clang++ -arch arm64 -isysroot $(IOSSDK)
 	else
-	  CC = cc -arch armv7 -isysroot $(IOSSDK)
-	  CXX = clang++ -arch armv7 -isysroot $(IOSSDK)
+		CC = cc -arch armv7 -isysroot $(IOSSDK)
+	  	CXX = clang++ -arch armv7 -isysroot $(IOSSDK)
 	endif
 	CFLAGS += -DIOS
 	ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
-	  CC     += -miphoneos-version-min=8.0
-	  CXX    += -miphoneos-version-min=8.0
-	  CFLAGS += -miphoneos-version-min=8.0
+	  	CC     += -miphoneos-version-min=8.0
+	  	CXX    += -miphoneos-version-min=8.0
+	  	CFLAGS += -miphoneos-version-min=8.0
 	else
-	  CC     += -miphoneos-version-min=5.0
-	  CXX    += -miphoneos-version-min=5.0
-	  CFLAGS += -miphoneos-version-min=5.0
+	  	CC     += -miphoneos-version-min=5.0
+	  	CXX    += -miphoneos-version-min=5.0
+	  	CFLAGS += -miphoneos-version-min=5.0
 	endif
 	TILED_RENDERING=1
 
@@ -184,7 +183,7 @@ else ifeq ($(platform), theos_ios)
 else ifeq ($(platform), qnx)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).so
 	fpic := -fPIC
-	SHARED := -lcpp -lm -shared -Wl,-version-script=$(LIBRETRO_DIR)/link.T -Wl,-no-undefined
+	SHARED := -lcpp -lm -shared -Wl,-version-script=link.T -Wl,-no-undefined
 	CC = qcc -Vgcc_ntoarmv7le
 	CXX = QCC -Vgcc_ntoarmv7le_cpp
 	AR = QCC -Vgcc_ntoarmv7le
@@ -312,7 +311,7 @@ else ifeq ($(platform), libnx)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	DEFINES := -DSWITCH=1 -U__linux__ -U__linux -DRARCH_INTERNAL -DHAVE_THREADS=1
 	CFLAGS := $(DEFINES) -g -O3 \
-		      -fPIE -I$(LIBNX)/include/ -ffunction-sections -fdata-sections -ftls-model=local-exec -Wl,--allow-multiple-definition -specs=$(LIBNX)/switch.specs
+				-fPIE -I$(LIBNX)/include/ -ffunction-sections -fdata-sections -ftls-model=local-exec -Wl,--allow-multiple-definition -specs=$(LIBNX)/switch.specs
 	CFLAGS += $(INCDIRS)
 	CFLAGS += $(INCLUDE) -D__SWITCH__ -DHAVE_LIBNX
 	CXXFLAGS := $(ASFLAGS) $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
@@ -332,19 +331,19 @@ else ifneq (,$(findstring armv,$(platform)))
 	TILED_RENDERING=1
 	fpic := -fPIC
 	ifneq (,$(findstring cortexa8,$(platform)))
-	  PLATFORM_DEFINES += -marm -mcpu=cortex-a8
+		PLATFORM_DEFINES += -marm -mcpu=cortex-a8
 	else ifneq (,$(findstring cortexa9,$(platform)))
-	  PLATFORM_DEFINES += -marm -mcpu=cortex-a9
+		PLATFORM_DEFINES += -marm -mcpu=cortex-a9
 	endif
 	PLATFORM_DEFINES += -marm
 	ifneq (,$(findstring neon,$(platform)))
-	  PLATFORM_DEFINES += -mfpu=neon
-	  HAVE_NEON=1
+		PLATFORM_DEFINES += -mfpu=neon
+		HAVE_NEON=1
 	endif
 	ifneq (,$(findstring softfloat,$(platform)))
-	  PLATFORM_DEFINES += -mfloat-abi=softfp
+		PLATFORM_DEFINES += -mfloat-abi=softfp
 	else ifneq (,$(findstring hardfloat,$(platform)))
-	  PLATFORM_DEFINES += -mfloat-abi=hard
+		PLATFORM_DEFINES += -mfloat-abi=hard
 	endif
 	PLATFORM_DEFINES += -DARM
 
@@ -517,7 +516,7 @@ else
 	TARGET := $(TARGET_NAME)_libretro.dll
 	CC = gcc
 	CXX = g++
-	SHARED := -shared -static-libgcc -static-libstdc++ -Wl,-no-undefined -Wl,-version-script=$(LIBRETRO_DIR)/link.T
+	SHARED := -shared -static-libgcc -static-libstdc++ -Wl,-no-undefined -Wl,-version-script=link.T
 	TILED_RENDERING=1
 endif
 
@@ -528,6 +527,18 @@ OBJS := $(SOURCES_CXX:.cpp=.o)
 ifeq ($(STATIC_LINKING),1)
 SHARED=
 fpic=
+endif
+
+ifneq (,$(findstring msvc,$(platform)))
+	WARNINGS :=
+else
+	WARNINGS := -Wall \
+		-Wno-sign-compare \
+		-Wno-unused-variable \
+		-Wno-unused-function \
+		-Wno-uninitialized \
+		$(NEW_GCC_WARNING_FLAGS) \
+		-Wno-strict-aliasing
 endif
 
 ifneq ($(SANITIZER),)
@@ -543,11 +554,6 @@ else
 	CFLAGS += -O2 -DNDEBUG
 	CXXFLAGS += -O2 -DNDEBUG
 endif
-
-WARNINGS := \
-		-Wall \
-		-Wunused-variable \
-		-Wunused-function
 
 CFLAGS += $(WARNINGS) $(fpic) $(VBA_DEFINES) $(ENDIANNESS_DEFINES) $(PLATFORM_DEFINES)
 CXXFLAGS += $(WARNINGS) $(fpic) $(VBA_DEFINES) $(ENDIANNESS_DEFINES) $(PLATFORM_DEFINES)
@@ -584,12 +590,6 @@ else
 	LD = $(CXX)
 endif
 
-%.o: %.cpp
-	$(CXX) -c $(OBJOUT)$@ $< $(CXXFLAGS) $(INCFLAGS)
-
-%.o: %.c
-	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
-
 ifeq ($(platform), theos_ios)
 COMMON_FLAGS := -DIOS $(COMMON_DEFINES) $(INCFLAGS) -I$(THEOS_INCLUDE_PATH) -Wno-error
 $(LIBRARY_NAME)_CFLAGS += $(CFLAGS) $(COMMON_FLAGS)
@@ -605,6 +605,12 @@ ifeq ($(STATIC_LINKING), 1)
 else
 	$(LD) $(LINKOUT)$@ $(SHARED) $(OBJS) $(LDFLAGS) $(LIBS)
 endif
+
+%.o: %.cpp
+	$(CXX) -c $(OBJOUT)$@ $< $(CXXFLAGS) $(INCFLAGS)
+
+%.o: %.c
+	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
 
 clean:
 	rm -f $(OBJS)
