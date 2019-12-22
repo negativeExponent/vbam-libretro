@@ -15,7 +15,7 @@ bool gfxInWin1[240];
 
 gba_lcd_t lcd;
 
-static inline void gfxClearArray(uint32_t* array)
+static INLINE void gfxClearArray(uint32_t* array)
 {
    for (int i = 0; i < 240;)
    {
@@ -77,7 +77,7 @@ struct TileLine
 
 typedef const TileLine (*TileReader)(const uint16_t*, const int, const uint8_t*, uint16_t*, const uint32_t);
 
-static inline void gfxDrawPixel(uint32_t* dest, const uint8_t color, const uint16_t* palette, const uint32_t prio)
+static INLINE void gfxDrawPixel(uint32_t* dest, const uint8_t color, const uint16_t* palette, const uint32_t prio)
 {
    *dest = color ? (READ16LE(&palette[color]) | prio) : 0x80000000;
 }
@@ -88,7 +88,7 @@ static inline void gfxDrawPixel(uint32_t* dest, const uint8_t color, const uint1
 #define HFLIP BIT(10)
 #define VFLIP BIT(11)
 
-inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
+INLINE const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
 {
    uint16_t tile = READ16LE(screenSource);
    int tileY = yyy & 7;
@@ -124,7 +124,7 @@ inline const TileLine gfxReadTile(const uint16_t* screenSource, const int yyy, c
    return tileLine;
 }
 
-inline const TileLine gfxReadTilePal(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
+INLINE const TileLine gfxReadTilePal(const uint16_t* screenSource, const int yyy, const uint8_t* charBase, uint16_t* palette, const uint32_t prio)
 {
    uint16_t tile = READ16LE(screenSource);
    int tileY = yyy & 7;
@@ -161,12 +161,12 @@ inline const TileLine gfxReadTilePal(const uint16_t* screenSource, const int yyy
    return tileLine;
 }
 
-static inline void gfxDrawTile(const TileLine& tileLine, uint32_t* line)
+static INLINE void gfxDrawTile(const TileLine& tileLine, uint32_t* line)
 {
    memcpy(line, tileLine.pixels, sizeof(tileLine.pixels));
 }
 
-static inline void gfxDrawTileClipped(const TileLine& tileLine, uint32_t* line, const int start, int w)
+static INLINE void gfxDrawTileClipped(const TileLine& tileLine, uint32_t* line, const int start, int w)
 {
    memcpy(line, tileLine.pixels + start, w * sizeof(uint32_t));
 }
@@ -405,13 +405,13 @@ void gfxDrawTextScreen(int layer)
 #endif // !__TILED_RENDERING
 
 template <typename T>
-static inline T MAX(T a, T b)
+static INLINE T MAX(T a, T b)
 {
    return (a > b) ? a : b;
 }
 
 template <typename T>
-static inline T MIN(T a, T b)
+static INLINE T MIN(T a, T b)
 {
    return (a < b) ? a : b;
 }
@@ -749,7 +749,7 @@ bool oam_updated;
 bool oam_obj_updated[128];
 static obj_attribute_t obj[128];
 
-static inline void update_oam()
+static INLINE void update_oam()
 {
    uint16_t* sprites = (uint16_t*)oam;
    uint16_t value = 0;
@@ -1249,7 +1249,7 @@ static void draw_obj_normal(int num, int16_t& lineOBJpix, int& m)
 }
 
 // computes ticks used by OBJ-WIN if OBJWIN is enabled
-static inline void update_objwin_lineOBJpix(int num, int16_t& lineOBJpix)
+static INLINE void update_objwin_lineOBJpix(int num, int16_t& lineOBJpix)
 {
    int sizeX = obj[num].sizeX;
    int sizeY = obj[num].sizeY;

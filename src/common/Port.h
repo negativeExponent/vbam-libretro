@@ -14,13 +14,13 @@
 #endif
 
 // swaps a 16-bit value
-static inline uint16_t swap16(uint16_t v)
+static INLINE uint16_t swap16(uint16_t v)
 {
         return (v << 8) | (v >> 8);
 }
 
 // swaps a 32-bit value
-static inline uint32_t swap32(uint32_t v)
+static INLINE uint32_t swap32(uint32_t v)
 {
         return (v << 24) | ((v << 8) & 0xff0000) | ((v >> 8) & 0xff00) | (v >> 24);
 }

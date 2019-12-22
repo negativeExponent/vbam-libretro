@@ -71,7 +71,7 @@ enum {
 #define DATATICKS_ACCESS_32_SEQ(addr) memoryWaitSeq32[((addr) >> 24) & 15]
 
 // Waitstates when accessing data
-inline void updateBusPrefetchCount(uint32_t address, int value)
+INLINE void updateBusPrefetchCount(uint32_t address, int value)
 {
     int addr = (address >> 24) & 15;
     switch (addr) {
@@ -98,7 +98,7 @@ inline void updateBusPrefetchCount(uint32_t address, int value)
 }
 
 // Waitstates when executing opcode
-inline int codeTicksAccess(int bits32, uint32_t address) // ARM/THUMB NON SEQ
+INLINE int codeTicksAccess(int bits32, uint32_t address) // ARM/THUMB NON SEQ
 {
     int addr = (address >> 24) & 15;
     switch (addr) {
@@ -122,7 +122,7 @@ inline int codeTicksAccess(int bits32, uint32_t address) // ARM/THUMB NON SEQ
     return bits32 ? memoryWait32[addr] : memoryWait[addr];
 }
 
-inline int codeTicksAccessSeq16(uint32_t address) // THUMB SEQ
+INLINE int codeTicksAccessSeq16(uint32_t address) // THUMB SEQ
 {
     int addr = (address >> 24) & 15;
     switch (addr) {
@@ -148,7 +148,7 @@ inline int codeTicksAccessSeq16(uint32_t address) // THUMB SEQ
     return memoryWaitSeq[addr];
 }
 
-inline int codeTicksAccessSeq32(uint32_t address) // ARM SEQ
+INLINE int codeTicksAccessSeq32(uint32_t address) // ARM SEQ
 {
     int addr = (address >> 24) & 15;
     switch (addr) {
@@ -176,7 +176,7 @@ inline int codeTicksAccessSeq32(uint32_t address) // ARM SEQ
 }
 
 // Emulates the Cheat System (m) code
-inline void cpuMasterCodeCheck()
+INLINE void cpuMasterCodeCheck()
 {
     if ((mastercode) && (mastercode == armNextPC)) {
         uint32_t joy = 0;

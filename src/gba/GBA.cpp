@@ -401,7 +401,7 @@ variable_desc saveGameStruct[] = {
    { NULL, 0 }
 };
 
-inline int CPUUpdateTicks()
+INLINE int CPUUpdateTicks()
 {
    int cpuLoopTicks = lcdTicks;
 

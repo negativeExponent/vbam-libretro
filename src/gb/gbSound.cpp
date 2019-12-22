@@ -30,7 +30,7 @@ void gbUpdateSoundTicks(int ticks)
     soundTicksUp += ticks;
 }
 
-static inline blip_time_t blip_time()
+static INLINE blip_time_t blip_time()
 {
     return soundTicksUp * ticks_to_time;
 }

@@ -139,7 +139,7 @@ extern gba_lcd_t lcd;
 
 #define MAKECOLOR(color) systemColorMap16[(color) & 0xFFFF]
 
-static inline uint32_t gfxIncreaseBrightness(uint32_t color, int coeff)
+static INLINE uint32_t gfxIncreaseBrightness(uint32_t color, int coeff)
 {
     color &= 0xffff;
     color = ((color << 16) | color) & 0x3E07C1F;
@@ -150,7 +150,7 @@ static inline uint32_t gfxIncreaseBrightness(uint32_t color, int coeff)
     return (color >> 16) | color;
 }
 
-static inline void gfxIncreaseBrightness(uint32_t* line, int coeff)
+static INLINE void gfxIncreaseBrightness(uint32_t* line, int coeff)
 {
     for (int x = 0; x < 240; x++) {
         uint32_t color = *line;
@@ -171,7 +171,7 @@ static inline void gfxIncreaseBrightness(uint32_t* line, int coeff)
     }
 }
 
-static inline uint32_t gfxDecreaseBrightness(uint32_t color, int coeff)
+static INLINE uint32_t gfxDecreaseBrightness(uint32_t color, int coeff)
 {
     color &= 0xffff;
     color = ((color << 16) | color) & 0x3E07C1F;
@@ -181,7 +181,7 @@ static inline uint32_t gfxDecreaseBrightness(uint32_t color, int coeff)
     return (color >> 16) | color;
 }
 
-static inline void gfxDecreaseBrightness(uint32_t* line, int coeff)
+static INLINE void gfxDecreaseBrightness(uint32_t* line, int coeff)
 {
     for (int x = 0; x < 240; x++) {
         uint32_t color = *line;
@@ -202,7 +202,7 @@ static inline void gfxDecreaseBrightness(uint32_t* line, int coeff)
     }
 }
 
-static inline uint32_t gfxAlphaBlend(uint32_t color, uint32_t color2, int ca, int cb)
+static INLINE uint32_t gfxAlphaBlend(uint32_t color, uint32_t color2, int ca, int cb)
 {
     if (color < 0x80000000) {
         color &= 0xffff;
@@ -227,7 +227,7 @@ static inline uint32_t gfxAlphaBlend(uint32_t color, uint32_t color2, int ca, in
     return color;
 }
 
-static inline void gfxAlphaBlend(uint32_t* ta, uint32_t* tb, int ca, int cb)
+static INLINE void gfxAlphaBlend(uint32_t* ta, uint32_t* tb, int ca, int cb)
 {
     for (int x = 0; x < 240; x++) {
         uint32_t color = *ta;

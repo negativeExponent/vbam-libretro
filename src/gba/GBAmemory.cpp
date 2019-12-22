@@ -486,7 +486,7 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
     UPDATE_REG(address & 0x3FE, value);
 }
 
-static inline uint32_t ROR(uint32_t value, uint32_t shift)
+static INLINE uint32_t ROR(uint32_t value, uint32_t shift)
 {
    if (!shift)
       return value;

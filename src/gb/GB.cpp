@@ -194,7 +194,7 @@ bool allowColorizerHack(void)
    return false;
 }
 
-static inline bool gbVramReadAccessValid(void)
+static INLINE bool gbVramReadAccessValid(void)
 {
    // A lot of 'ugly' checks... But only way to emulate this particular behaviour...
    if (allowColorizerHack() || ((gbHardware & 0xa) && ((gbLcdModeDelayed != 3) || (((register_LY == 0) && (gbScreenOn == false) && (register_LCDC & 0x80)) && (gbLcdLYIncrementTicksDelayed == (GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS))))) || ((gbHardware & 0x5) && (gbLcdModeDelayed != 3) && ((gbLcdMode != 3) || ((register_LY == 0) && ((gbScreenOn == false) && (register_LCDC & 0x80)) && (gbLcdLYIncrementTicks == (GBLY_INCREMENT_CLOCK_TICKS - GBLCD_MODE_2_CLOCK_TICKS))))))
@@ -202,7 +202,7 @@ static inline bool gbVramReadAccessValid(void)
    return false;
 }
 
-static inline bool gbVramWriteAccessValid(void)
+static INLINE bool gbVramWriteAccessValid(void)
 {
    if (allowColorizerHack() ||
        // No access to Vram during mode 3
@@ -215,7 +215,7 @@ static inline bool gbVramWriteAccessValid(void)
    return false;
 }
 
-static inline bool gbCgbPaletteAccessValid(void)
+static INLINE bool gbCgbPaletteAccessValid(void)
 {
    // No access to gbPalette during mode 3 (Color Panel Demo)
    if (allowColorizerHack() || ((gbLcdModeDelayed != 3) && (!((gbLcdMode == 0) && (gbLcdTicks >= (GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299] - 1)))) && (!gbSpeed)) || (gbSpeed && ((gbLcdMode == 1) || (gbLcdMode == 2) || ((gbLcdMode == 3) && (gbLcdTicks > (GBLCD_MODE_3_CLOCK_TICKS - 2))) || ((gbLcdMode == 0) && (gbLcdTicks <= (GBLCD_MODE_0_CLOCK_TICKS - gbSpritesTicks[299] - 2))))))
@@ -223,7 +223,7 @@ static inline bool gbCgbPaletteAccessValid(void)
    return false;
 }
 
-int inline gbGetValue(int min, int max, int v)
+int INLINE gbGetValue(int min, int max, int v)
 {
    return (int)(min + (float)(max - min) * (2.0 * (v / 31.0) - (v / 31.0) * (v / 31.0)));
 }

@@ -525,8 +525,8 @@ include Makefile.common
 OBJS := $(SOURCES_CXX:.cpp=.o)
 
 ifeq ($(STATIC_LINKING),1)
-SHARED=
-fpic=
+	SHARED=
+	fpic=
 endif
 
 ifneq (,$(findstring msvc,$(platform)))
@@ -542,47 +542,55 @@ else
 endif
 
 ifneq ($(SANITIZER),)
-	CFLAGS += -fsanitize=$(SANITIZER)
+	CFLAGS   += -fsanitize=$(SANITIZER)
 	CXXFLAGS += -fsanitize=$(SANITIZER)
-	LDFLAGS += -fsanitize=$(SANITIZER)
+	LDFLAGS  += -fsanitize=$(SANITIZER)
 endif
 
 ifeq ($(DEBUG), 1)
-	CFLAGS += -O0 -g
+	CFLAGS   += -O0 -g
 	CXXFLAGS += -O0 -g
 else
-	CFLAGS += -O2 -DNDEBUG
+	CFLAGS   += -O2 -DNDEBUG
 	CXXFLAGS += -O2 -DNDEBUG
 endif
 
-CFLAGS += $(WARNINGS) $(fpic) $(VBA_DEFINES) $(ENDIANNESS_DEFINES) $(PLATFORM_DEFINES)
+CFLAGS   += $(WARNINGS) $(fpic) $(VBA_DEFINES) $(ENDIANNESS_DEFINES) $(PLATFORM_DEFINES)
 CXXFLAGS += $(WARNINGS) $(fpic) $(VBA_DEFINES) $(ENDIANNESS_DEFINES) $(PLATFORM_DEFINES)
+
+ifneq (,$(findstring msvc,$(platform)))
+	CFLAGS   += -DINLINE="_inline"
+	CXXFLAGS += -DINLINE="_inline"
+else
+	CFLAGS   += -DINLINE="inline"
+	CXXFLAGS += -DINLINE="inline"
+endif
 
 OBJOUT   = -o
 LINKOUT  = -o
 
 ifneq (,$(findstring msvc,$(platform)))
-	OBJOUT = -Fo
+	OBJOUT  = -Fo
 	LINKOUT = -out:
 ifeq ($(STATIC_LINKING),1)
 	LD ?= lib.exe
 	STATIC_LINKING=0
 
 	ifeq ($(DEBUG), 1)
-		CFLAGS += -MTd
+		CFLAGS   += -MTd
 		CXXFLAGS += -MTd
 	else
-		CFLAGS += -MT
+		CFLAGS   += -MT
 		CXXFLAGS += -MT
 	endif
 else
 	LD = link.exe
 
 	ifeq ($(DEBUG), 1)
-		CFLAGS += -MDd
+		CFLAGS   += -MDd
 		CXXFLAGS += -MDd
 	else
-		CFLAGS += -MD
+		CFLAGS   += -MD
 		CXXFLAGS += -MD
 	endif
 endif
@@ -615,7 +623,6 @@ endif
 clean:
 	rm -f $(OBJS)
 	rm -f $(TARGET)
-	rm -f *.a
 
 .PHONY: clean
 endif
