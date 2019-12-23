@@ -91,6 +91,70 @@ struct retro_core_option_definition option_defs_us[] = {
         },
         "disabled"
     },
+
+    // GB Sound Effects
+    {
+        "vbam_gbSfxEnable",
+        "(GB) Enable Sound Effects",
+        "Enable or disable all sound effects.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
+        "vbam_gbSfxSurround",
+        "(GB) Surround Effects",
+        "Enable or disable surround simulation effects.",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
+        "vbam_gbSfxEcho",
+        "(GB) Echo",
+        "Increase or decrease echo effects.",
+        {
+            { "0",  NULL },
+            { "1",  NULL },
+            { "2",  NULL },
+            { "3",  NULL },
+            { "4",  NULL },
+            { "5",  NULL },
+            { "6",  NULL },
+            { "7",  NULL },
+            { "8",  NULL },
+            { "9",  NULL },
+            { "10", NULL },
+            { NULL, NULL },
+        },
+        "2"
+    },
+    {
+        "vbam_gbSfxStereo",
+        "(GB) Stereo Separation",
+        "Increase or decrease simulated stereo effect. At zero sound appears to come from the center.",
+        {
+            { "0",  NULL },
+            { "1",  NULL },
+            { "2",  NULL },
+            { "3",  NULL },
+            { "4",  NULL },
+            { "5",  NULL },
+            { "6",  NULL },
+            { "7",  NULL },
+            { "8",  NULL },
+            { "9",  NULL },
+            { "10", NULL },
+            { NULL, NULL },
+        },
+        "2"
+    },
     {
         "vbam_soundinterpolation",
         "Sound Interpolation",

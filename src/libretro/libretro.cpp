@@ -708,6 +708,63 @@ static void update_variables(bool startup)
       update_input_solar_sensor(newval);
    }
 
+   static gb_effects_config_t gbSfx;
+   bool gbSfx_changed = false;
+   var.key = "vbam_gbSfxEnable";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !startup)
+   {
+      bool newval = (!strcmp(var.value, "disabled")) ? false : true;
+      if (newval != gbSfx.enabled)
+      {
+         gbSfx_changed = true;
+         gbSfx.enabled = newval;
+      }
+   }
+
+   var.key = "vbam_gbSfxSurround";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !startup)
+   {
+      bool newval = (!strcmp(var.value, "disabled")) ? false : true;
+      if (newval != gbSfx.surround)
+      {
+         gbSfx_changed = true;
+         gbSfx.surround = newval;
+      }
+   }
+
+   var.key = "vbam_gbSfxEcho";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !startup)
+   {
+      float newval = atof(var.value) * 0.1f;
+      if (newval != gbSfx.echo)
+      {
+         gbSfx_changed = true;
+         gbSfx.echo = newval;
+      }
+   }
+
+   var.key = "vbam_gbSfxStereo";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !startup)
+   {
+      float newval = atof(var.value) * 0.1f;
+      if (newval != gbSfx.stereo)
+      {
+         gbSfx_changed = true;
+         gbSfx.stereo = newval;
+      }
+   }
+
+   if (gbSfx_changed)
+      gbSoundConfigEffects(gbSfx);
+
    var.key = "vbam_showborders";
    var.value = NULL;
 
@@ -1059,7 +1116,7 @@ RETRO_API void retro_reset(void)
 
 RETRO_API void retro_run(void)
 {
-   bool updated = false;   
+   bool updated = false;
 
    if (firstrun)
    {
@@ -1214,7 +1271,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 {
    if (!game)
       return false;
-   
+
    IMAGE_TYPE type = utilFindType((const char *)game->path);
 
    if (type == IMAGE_UNKNOWN)
@@ -1396,7 +1453,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
       i++;
 
       if (gbWram && gbCgbMode)
-      { 
+      {
          // banks 2-7 of GBC work ram banks at $10000
          desc[i].ptr    = gbWram;
          desc[i].offset = 0x2000;

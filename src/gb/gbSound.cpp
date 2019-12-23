@@ -74,6 +74,7 @@ static void apply_effects()
 void gbSoundConfigEffects(gb_effects_config_t const& c)
 {
     gb_effects_config = c;
+    apply_effects();
 }
 
 static void apply_volume()
@@ -93,9 +94,7 @@ void gbSoundTick()
         flush_samples(stereo_buffer);
 
         // Update effects config if it was changed
-        if (memcmp(&gb_effects_config_current, &gb_effects_config,
-                sizeof gb_effects_config)
-            || soundGetEnable() != prevSoundEnable)
+        if (soundGetEnable() != prevSoundEnable)
             apply_effects();
 
         if (soundVolume_ != soundGetVolume())
