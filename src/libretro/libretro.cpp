@@ -223,7 +223,7 @@ static void gbInitRTC(void)
 
 static void SetGBBorder(unsigned val)
 {
-   struct retro_system_av_info avinfo = { 0 };
+   struct retro_system_av_info avinfo = {};
    unsigned geometry_changed = 0;
 
    switch (val)
@@ -762,7 +762,7 @@ static void update_variables(bool startup)
       }
    }
 
-   if (gbSfx_changed)
+   if (core && core->type == IMAGE_GB && gbSfx_changed)
       gbSoundConfigEffects(gbSfx);
 
    var.key = "vbam_showborders";
@@ -937,26 +937,36 @@ static void update_variables(bool startup)
    }
 
    // Hide some core options depending on rom image type
-   //if (startup)
+   if (!emulating)
    {
       unsigned i;
       struct retro_core_option_display option_display;
-      char gb_options[5][25] = {
+      char gb_options[][25] = {
          "vbam_palettes",
          "vbam_gbHardware",
          "vbam_allowcolorizerhack",
          "vbam_showborders",
-         "vbam_gbcoloroption"
+         "vbam_gbcoloroption",
+         "vbam_gbSfxEnable",
+         "vbam_gbSfxSurround",
+         "vbam_gbSfxEcho",
+         "vbam_gbSfxStereo"
       };
-      char gba_options[3][22] = {
+
+      char gba_options[][25] = {
          "vbam_solarsensor",
          "vbam_gyro_sensitivity",
-         "vbam_forceRTCenable"
+         "vbam_forceRTCenable",
+         "vbam_soundinterpolation",
+         "vbam_soundfiltering"
       };
+
+      #define SIZE_OF_GB_OPT (sizeof(gb_options) / sizeof(gb_options[0]))
+      #define SIZE_OF_GBA_OPT (sizeof(gba_options) / sizeof(gba_options[0]))
 
       // Show or hide GB/GBC only options
       option_display.visible = (core && core->type == IMAGE_GB) ? 1 : 0;
-      for (i = 0; i < 5; i++)
+      for (i = 0; i < SIZE_OF_GB_OPT; i++)
       {
          option_display.key = gb_options[i];
          environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
@@ -964,7 +974,7 @@ static void update_variables(bool startup)
 
       // Show or hide GBA only options
       option_display.visible = (core && core->type == IMAGE_GBA) ? 1 : 0;
-      for (i = 0; i < 3; i++)
+      for (i = 0; i < SIZE_OF_GBA_OPT; i++)
       {
          option_display.key = gba_options[i];
          environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
