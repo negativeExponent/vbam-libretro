@@ -53,6 +53,11 @@ INLINE void gbSgbDraw16Bit(uint16_t* p, uint16_t v)
     *p = systemColorMap16[v];
 }
 
+static INLINE void gbSgbDraw(pixFormat* p, uint16_t v)
+{
+    *p = ColorMap[v];
+}
+
 void gbSgbReset()
 {
     gbSgbPacketTimeout = 0;
@@ -114,7 +119,7 @@ void gbSgbFillScreen(uint16_t color)
         int yLine = (y + gbBorderRowSkip) * gbBorderLineSkip + gbBorderColumnSkip;
         pixFormat* dest = pix + yLine;
         for (int x = 0; x < 160; x++)
-            gbSgbDraw16Bit(dest++, color);
+            gbSgbDraw(dest++, color);
     }
 }
 
@@ -214,7 +219,7 @@ void gbSgbDrawBorderTile(int x, int y, int tile, int attr)
                 } else {
                     cc = gbPalette[0];
                 }
-                gbSgbDraw16Bit(dest + yyy * 256 + xxx, cc);
+                gbSgbDraw(dest + yyy * 256 + xxx, cc);
             }
 
             mask >>= 1;

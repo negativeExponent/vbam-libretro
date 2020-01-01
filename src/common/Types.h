@@ -21,6 +21,4 @@
 #include <stdint.h>
 #include <string.h>
 
-typedef uint16_t pixFormat;
-
 #endif // __VBA_TYPES_H__

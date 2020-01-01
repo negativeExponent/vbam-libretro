@@ -94,6 +94,8 @@ int emulating = 0;
 int romSize = 0;
 int hardware = HW_NONE;
 
+pixFormat* ColorMap;
+
 void (*dbgOutput)(const char *s, uint32_t addr);
 void (*dbgSignal)(int sig, int number);
 
@@ -1277,6 +1279,9 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
    utilUpdateSystemColorMaps(false);
    soundInit();
 
+   ColorMap = (systemColorDepth == 16) ?
+      (pixFormat*)systemColorMap16 : (pixFormat*)systemColorMap32;
+
    struct retro_memory_descriptor desc[18];
    struct retro_memory_map retromap;
 
@@ -1601,7 +1606,7 @@ bool systemCanChangeSoundQuality(void)
    return true;
 }
 
-void systemDrawScreen(uint16_t *pix)
+void systemDrawScreen(pixFormat *pix)
 {
    has_frame++;
 }

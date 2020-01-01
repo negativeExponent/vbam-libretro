@@ -14,6 +14,14 @@
 
 #define winlog log
 
+#ifdef FRONTEND_SUPPORTS_RGB565
+typedef uint16_t pixFormat;
+#else
+typedef uint32_t pixFormat;
+#endif
+
+extern pixFormat* ColorMap;
+
 class SoundDriver;
 
 struct EmulatedSystem
@@ -69,7 +77,7 @@ log(const char*, ...);
 extern bool systemPauseOnFrame();
 extern void systemGbPrint(uint8_t*, int, int, int, int, int);
 extern void systemScreenCapture(int);
-extern void systemDrawScreen(uint16_t*);
+extern void systemDrawScreen(pixFormat*);
 // updates the joystick data
 extern bool systemReadJoypads();
 // return information about the given joystick, -1 for default joystick

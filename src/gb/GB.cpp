@@ -2600,25 +2600,25 @@ void gbDrawLine()
        + gbBorderColumnSkip;
    for (int x = 0; x < 160;)
    {
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
 
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
 
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
 
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
-      *dest++ = systemColorMap16[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
+      *dest++ = ColorMap[gbLineMix[x++]];
    }
    if (gbBorderOn)
       dest += gbBorderColumnSkip;

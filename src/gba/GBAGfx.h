@@ -130,14 +130,13 @@ extern uint32_t lineOBJ[240];
 extern uint32_t lineOBJWin[240];
 extern bool gfxInWin0[240];
 extern bool gfxInWin1[240];
-extern uint16_t systemColorMap16[0x10000];
 
 extern bool oam_updated;
 extern bool oam_obj_updated[128];
 
 extern gba_lcd_t lcd;
 
-#define MAKECOLOR(color) systemColorMap16[(color) & 0xFFFF]
+#define MAKECOLOR(color) ColorMap[(color) & 0xFFFF]
 
 static INLINE uint32_t gfxIncreaseBrightness(uint32_t color, int coeff)
 {
