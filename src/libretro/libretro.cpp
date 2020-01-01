@@ -35,8 +35,8 @@
 #include "../gb/gbSGB.h"
 #include "../gb/gbSound.h"
 
-#define FRAMERATE  (16777216.0 / 280896.0) // 59.73
-#define SAMPLERATE 32768.0
+#define FRAMERATE  (16777216 / 280896) // 59.73
+#define SAMPLERATE 32768
 
 // just provide enough audio buffer size
 #define SOUND_BUFFER_SIZE 4096
@@ -1060,9 +1060,6 @@ RETRO_API void retro_init(void)
 
 RETRO_API void retro_deinit(void)
 {
-   emulating = 0;
-   core->emuCleanUp();
-   soundShutdown();
    libretro_supports_bitmasks = false;
    can_dupe = false;
 }
@@ -1090,6 +1087,8 @@ RETRO_API void retro_get_system_info(struct retro_system_info *info)
 
 RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
 {
+   double framerate = (double)FRAMERATE;
+   double sample_rate = double(SAMPLERATE);
    double aspect      = (3.0 / 2.0);
    unsigned maxWidth  = GBA_WIDTH;
    unsigned maxHeight = GBA_HEIGHT;
@@ -1106,8 +1105,8 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info)
    info->geometry.max_width    = maxWidth;
    info->geometry.max_height   = maxHeight;
    info->geometry.aspect_ratio = aspect;
-   info->timing.fps            = FRAMERATE;
-   info->timing.sample_rate    = SAMPLERATE;
+   info->timing.fps            = framerate;
+   info->timing.sample_rate    = sample_rate;
 }
 
 RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device)
@@ -1128,22 +1127,6 @@ RETRO_API void retro_run(void)
 {
    bool updated = false;
 
-   if (firstrun)
-   {
-      firstrun = false;
-      /* Check if GB game has RTC data. Has to be check here since this is where the data will be
-       * available when using libretro api. */
-      if ((core->type == IMAGE_GB) && gbRTCPresent)
-      {
-         /* Check if any RTC has been loaded, zero value means nothing has been loaded. */
-         if (!rtcData.mapperSeconds && !rtcData.mapperLSeconds && rtcData.mapperLastTime == (time_t)-1)
-         {
-            /* Initialize RTC */
-            gbInitRTC();
-         }
-      }
-   }
-
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
       update_variables(false);
 
@@ -1155,8 +1138,8 @@ RETRO_API void retro_run(void)
    core->emuMain(core->emuCount, input_buf);
    video_cb(has_frame ? pix : NULL, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
 
-   int soundlen = core->emuFlushAudio(soundbuf);
-   audio_batch_cb((const int16_t*)soundbuf, soundlen >> 1);
+   int soundlen = core->emuFlushAudio(soundbuf) >> 1;
+   audio_batch_cb((const int16_t*)soundbuf, soundlen);
 }
 
 RETRO_API size_t retro_serialize_size(void)
@@ -1499,6 +1482,9 @@ RETRO_API bool retro_load_game_special(unsigned, const struct retro_game_info *,
 
 void retro_unload_game(void)
 {
+   emulating = 0;
+   core->emuCleanUp();
+   soundShutdown();
 }
 
 RETRO_API unsigned retro_get_region(void)
@@ -1581,8 +1567,16 @@ RETRO_API size_t retro_get_memory_size(unsigned id)
          }
          break;
       case RETRO_MEMORY_RTC:
-         if (gbRTCPresent)
-            size = GB_RTC_DATA_SIZE;
+         if (!emulating)
+            return 0;
+
+         if (!gbRTCPresent)
+            return 0;
+
+         if (!rtcData.mapperSeconds && !rtcData.mapperLSeconds && rtcData.mapperLastTime == (time_t)-1)
+            gbInitRTC();
+
+         size = GB_RTC_DATA_SIZE;
          break;
       }
       break;
