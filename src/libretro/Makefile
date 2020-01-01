@@ -3,6 +3,11 @@ TILED_RENDERING=0
 STATIC_LINKING=0
 FRONTEND_SUPPORTS_RGB565=1
 NO_LINK=0
+VERBOSE=0
+
+ifneq ($(VERBOSE),1)
+   Q := @
+endif
 
 SPACE :=
 SPACE := $(SPACE) $(SPACE)
@@ -671,17 +676,21 @@ ifeq ($(platform), emscripten)
 else ifeq ($(STATIC_LINKING), 1)
 	$(AR) rcs $@ $(OBJECTS)
 else
-	$(LD) $(LINKOUT)$@ $^ $(LDFLAGS) $(LIBS)
+	$(Q)$(LD) $(LINKOUT)$@ $^ $(LDFLAGS) $(LIBS)
+	@$(if $(Q), $(shell echo echo LD $@),)
 endif
 
 %.o: %.cpp
-	$(CXX) -c $(OBJOUT)$@ $< $(CXXFLAGS) $(INCFLAGS)
+	$(Q)$(CXX) -c $(OBJOUT)$@ $< $(CXXFLAGS) $(INCFLAGS)
+	@$(if $(Q), $(shell echo echo CXX $<),)
 
 %.o: %.c
-	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
+	$(Q)$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
+	@$(if $(Q), $(shell echo echo CC $<),)
 
 clean:
-	rm -f $(OBJS)
+	$(Q)rm -f $(OBJS)
+	@$(if $(Q), $(shell echo echo rm -f *.o),)
 	rm -f $(TARGET)
 
 .PHONY: clean
