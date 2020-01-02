@@ -15,7 +15,7 @@
 #include "gbCheats.h"
 #include "gbConstants.h"
 #include "gbGlobals.h"
-#include "gbMemory.h"
+#include "gbMBC.h"
 #include "gbSGB.h"
 #include "gbSound.h"
 

@@ -59,6 +59,6 @@ SOURCES_CXX += \
 	$(CORE_DIR)/gb/GB.cpp \
 	$(CORE_DIR)/gb/gbGfx.cpp \
 	$(CORE_DIR)/gb/gbGlobals.cpp \
-	$(CORE_DIR)/gb/gbMemory.cpp \
+	$(CORE_DIR)/gb/gbMBC.cpp \
 	$(CORE_DIR)/gb/gbSGB.cpp \
 	$(CORE_DIR)/gb/gbSound.cpp

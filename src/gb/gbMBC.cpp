@@ -7,7 +7,7 @@
 #include "gb.h"
 #include "gbConstants.h"
 #include "gbGlobals.h"
-#include "gbMemory.h"
+#include "gbMBC.h"
 
 static uint8_t gbCheatingDevice = 0; // 1 = GS, 2 = GG
 static uint8_t gbRamFill = 0xff;

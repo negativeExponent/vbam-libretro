@@ -3,7 +3,7 @@
 #include "../Util.h"
 #include "gbGlobals.h"
 #include "gbSGB.h"
-#include "gbMemory.h"
+#include "gbMBC.h"
 
 static const uint8_t gbInvertTab[256] = {
    0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,

@@ -1,5 +1,5 @@
-#ifndef GBMEMORY_H
-#define GBMEMORY_H
+#ifndef GB_MBC_H
+#define GB_MBC_H
 
 #include "../common/Types.h"
 #include <time.h>
@@ -363,4 +363,4 @@ void gbMbcReadGame(const uint8_t*&, int);
 
 #define TAMA5_RTC_DATA_SIZE sizeof(int) * 14 + sizeof(uint64_t)
 
-#endif // GBMEMORY_H
+#endif // GB_MBC_H

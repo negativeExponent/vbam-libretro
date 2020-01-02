@@ -31,7 +31,7 @@
 #include "../gb/gb.h"
 #include "../gb/gbCheats.h"
 #include "../gb/gbGlobals.h"
-#include "../gb/gbMemory.h"
+#include "../gb/gbMBC.h"
 #include "../gb/gbSGB.h"
 #include "../gb/gbSound.h"
 
