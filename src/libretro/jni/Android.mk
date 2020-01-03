@@ -7,7 +7,7 @@ TILED_RENDERING          := 1
 
 include $(LIBRETRO_DIR)/Makefile.common
 
-COREFLAGS := -DHAVE_STDINT_H $(VBA_DEFINES) $(INCFLAGS)
+COREFLAGS := -DHAVE_STDINT_H $(VBA_DEFINES) $(INCFLAGS) -DINLINE=inline
 
 VBAM_VERSION := $(shell sed -En 's/.*\[([0-9]+[^]]+).*/\1/p; T; q' ../../CHANGELOG.md 2>/dev/null)
 COREFLAGS += -DVBAM_VERSION=\"$(VBAM_VERSION)\"
