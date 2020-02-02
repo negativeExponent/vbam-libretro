@@ -1,7 +1,6 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-
 - [Visual Boy Advance - M](#visual-boy-advance---m)
   - [Building](#building)
   - [Cross compiling for 32 bit on a 64 bit host](#cross-compiling-for-32-bit-on-a-64-bit-host)
@@ -13,6 +12,17 @@
   - [Contributing](#contributing)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+
+This is a minimal fork of libretro-vbam which itself is a fork of VBA-M (VisualBoyAdvance-M) for libretro with some perfomance enhancements, accuracy and bug fixes.
+
+Some changes includes:
+* GB Sound Effects (echo, surround, stereo separation)
+* Fix for Pinball Deluxe
+* Fix for missing sprites in GBC
+* Better GB to GBC compatibility for some games
+* Better libretro integration like update memory maps, input bitmasks etc...
+* others
 
 [![Join the chat at https://gitter.im/visualboyadvance-m/Lobby](https://badges.gitter.im/visualboyadvance-m/Lobby.svg)](https://gitter.im/visualboyadvance-m/Lobby)
 [![Build Status](https://travis-ci.org/visualboyadvance-m/visualboyadvance-m.svg?branch=master)](https://travis-ci.org/visualboyadvance-m/visualboyadvance-m)
