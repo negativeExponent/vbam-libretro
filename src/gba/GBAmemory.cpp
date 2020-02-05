@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 
 #include "GBAGfx.h"
 #include "GBALink.h"
