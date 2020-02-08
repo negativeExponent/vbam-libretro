@@ -81,6 +81,18 @@ struct retro_core_option_definition option_defs_us[] = {
         "disabled"
     },
     {
+        "vbam_interframeblend",
+        "Interframe Blending",
+        "",
+        {
+            { "disabled",   NULL },
+            { "smart",      NULL },
+            { "motionblur", NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
         "vbam_forceRTCenable",
         "Force-Enable RTC",
         "Forces the internal real-time clock to be enabled regardless of rom. Usuable for rom patches that requires clock to be enabled (aka Pokemon).",

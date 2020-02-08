@@ -18,6 +18,9 @@ VBA_DEFINES += -DNO_LINK
 endif
 
 SOURCES_CXX += \
+	$(CORE_DIR)/filter/interframe.cpp
+
+SOURCES_CXX += \
 	$(CORE_DIR)/libretro/libretro.cpp \
 	$(CORE_DIR)/libretro/libretro_input.cpp \
 	$(CORE_DIR)/libretro/UtilRetro.cpp \

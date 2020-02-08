@@ -18,6 +18,8 @@
 #include "../common/ConfigManager.h"
 #include "../common/Port.h"
 
+#include "../filter/interframe.hpp"
+
 #include "../gba/Cheats.h"
 #include "../gba/EEprom.h"
 #include "../gba/Flash.h"
@@ -69,6 +71,16 @@ int option_analogDeadzone              = 0;
 int option_gyroSensitivity             = 0;
 int option_tiltSensitivity             = 0;
 bool option_swapAnalogSticks           = false;
+typedef void (*ifbfunc_t)(pixFormat*, int, int);
+
+// InterFrame Blending
+typedef enum IFB_TYPES {
+   IFB_NONE = 0,
+   IFB_SMART,
+   IFB_MOTIONBLUR,
+};
+
+static IFB_TYPES option_ifbType = IFB_NONE;
 
 static unsigned systemWidth  = GBA_WIDTH;
 static unsigned systemHeight = GBA_HEIGHT;
@@ -902,6 +914,23 @@ static void update_variables(bool startup)
       gbColorOption = (!strcmp(var.value, "enabled")) ? 1 : 0;
    }
 
+   var.key = "vbam_interframeblend";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      IFB_TYPES newval = IFB_NONE;
+      if (!strcmp(var.value, "smart"))
+         newval = IFB_SMART;
+      else if (!strcmp(var.value, "motionblur"))
+         newval = IFB_MOTIONBLUR;
+      if (option_ifbType != newval)
+      {
+         InterframeCleanup();
+         option_ifbType = newval;
+      }
+   }
+
    var.key = "vbam_show_advanced_options";
    var.value = NULL;
 
@@ -1036,6 +1065,7 @@ RETRO_API void retro_init(void)
       snprintf(retro_system_directory, sizeof(retro_system_directory), "%s", dir);
 
 #ifdef FRONTEND_SUPPORTS_RGB565
+   RGB_LOW_BITS_MASK = 0x821;
    systemColorDepth = 16;
    systemRedShift = 11;
    systemGreenShift = 6;
@@ -1044,6 +1074,7 @@ RETRO_API void retro_init(void)
    if (environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb565) && log_cb)
       log_cb(RETRO_LOG_INFO, "Frontend supports RGB565 - will use that instead of XRGB1555.\n");
 #else
+   RGB_LOW_BITS_MASK = 0x10101;
    systemColorDepth = 32;
    systemRedShift = 19;
    systemGreenShift = 11;
@@ -1138,10 +1169,27 @@ RETRO_API void retro_run(void)
 
    has_frame = 0;
    core->emuMain(core->emuCount, input_buf);
-   video_cb(has_frame ? pix : NULL, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
-
    int soundlen = core->emuFlushAudio(soundbuf) >> 1;
    audio_batch_cb((const int16_t*)soundbuf, soundlen);
+
+   if (has_frame)
+   {
+      switch (option_ifbType)
+      {
+      case IFB_SMART:
+         SmartIB(pix, systemWidth, systemHeight);
+         break;
+      case IFB_MOTIONBLUR:
+         MotionBlurIB(pix, systemWidth, systemHeight);
+         break;
+      default:
+         break;
+      }
+
+      video_cb(pix, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
+   }
+   else
+      video_cb(NULL, systemWidth, systemHeight, systemWidth * sizeof(pixFormat));
 }
 
 RETRO_API size_t retro_serialize_size(void)
@@ -1490,6 +1538,7 @@ void retro_unload_game(void)
    emulating = 0;
    core->emuCleanUp();
    soundShutdown();
+   InterframeCleanup();
 }
 
 RETRO_API unsigned retro_get_region(void)
