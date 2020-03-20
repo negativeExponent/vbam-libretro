@@ -71,10 +71,12 @@ int option_analogDeadzone              = 0;
 int option_gyroSensitivity             = 0;
 int option_tiltSensitivity             = 0;
 bool option_swapAnalogSticks           = false;
+bool option_lcdFilter                  = false;
+
 typedef void (*ifbfunc_t)(pixFormat*, int, int);
 
 // InterFrame Blending
-typedef enum IFB_TYPES {
+enum IFB_TYPES {
    IFB_NONE = 0,
    IFB_SMART,
    IFB_MOTIONBLUR,
@@ -703,6 +705,17 @@ static void update_variables(bool startup)
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       option_useBios = (!strcmp(var.value, "enabled")) ? true : false;
+   }
+
+   var.key = "vbam_lcdfilter";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      bool last_option = option_lcdFilter;
+      option_lcdFilter = (!strcmp(var.value, "enabled")) ? true : false;
+      if (option_lcdFilter != last_option)
+         utilUpdateSystemColorMaps(option_lcdFilter);
    }
 
    var.key = "vbam_forceRTCenable";

@@ -17,8 +17,10 @@ ifeq ($(NO_LINK),1)
 VBA_DEFINES += -DNO_LINK
 endif
 
+# filters
 SOURCES_CXX += \
-	$(CORE_DIR)/filter/interframe.cpp
+	$(CORE_DIR)/filter/interframe.cpp \
+	$(CORE_DIR)/gba/gbafilter.cpp
 
 SOURCES_CXX += \
 	$(CORE_DIR)/libretro/libretro.cpp \

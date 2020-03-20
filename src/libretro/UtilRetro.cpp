@@ -14,6 +14,7 @@
 #include "gba/Globals.h"
 #include "gba/RTC.h"
 #include "gb/gbGlobals.h"
+#include "gba/gbafilter.h"
 
 #ifndef _MSC_VER
 #include <strings.h>
@@ -227,17 +228,17 @@ void utilUpdateSystemColorMaps(bool lcd)
 {
     int i = 0;
 
-    (void)lcd;
-
     switch (systemColorDepth) {
     case 16:
         for (i = 0; i < 0x10000; i++)
             systemColorMap16[i] = ((i & 0x1f) << systemRedShift) | (((i & 0x3e0) >> 5) << systemGreenShift) | (((i & 0x7c00) >> 10) << systemBlueShift);
+        if (lcd) gbafilter_pal(systemColorMap16, 0x10000);
         break;
     case 24:
     case 32:
         for (i = 0; i < 0x10000; i++)
             systemColorMap32[i] = ((i & 0x1f) << systemRedShift) | (((i & 0x3e0) >> 5) << systemGreenShift) | (((i & 0x7c00) >> 10) << systemBlueShift);
+        if (lcd) gbafilter_pal32(systemColorMap32, 0x10000);
         break;
     }
 }

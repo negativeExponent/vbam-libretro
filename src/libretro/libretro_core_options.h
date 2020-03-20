@@ -81,6 +81,17 @@ struct retro_core_option_definition option_defs_us[] = {
         "disabled"
     },
     {
+        "vbam_lcdfilter",
+        "LCD Color Filter",
+        "",
+        {
+            { "disabled",  NULL },
+            { "enabled",   NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
         "vbam_interframeblend",
         "Interframe Blending",
         "",
