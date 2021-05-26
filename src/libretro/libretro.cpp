@@ -161,9 +161,6 @@ static void set_gbPalette(void)
     }
 }
 
-extern void memoryupdateHuC3Clock();
-extern void memoryupdateHuC3Latch();
-
 static void* gb_rtcdata_prt(void)
 {
     switch (gbRomType) {
@@ -239,8 +236,7 @@ static void gbInitRTC(void)
         }
         break;
     case 0xfe:
-        //memoryupdateHuC3Clock();
-        memoryupdateHuC3Latch();
+        gbRTCHuC3.mapperLastTime = rawtime;
         break;
     }
 }

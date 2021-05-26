@@ -106,10 +106,15 @@ struct mapperHuC3RTC {
         time_t mapperLastTime;
         uint64_t _time_pad; /* so that 32bit and 64bit saves are compatible */
     };
-    uint32_t mapperDateTime;
-    uint32_t mapperWritingTime;
-    uint32_t mapperModeFlag;
-    uint32_t mapperClockShift;
+    int mapperDateTime;
+    int mapperModeFlag;
+    int mapperClockShift;
+    int mapperSeconds;
+    // reserved variables for state expansion
+    int mapperRegister1;
+    int mapperRegister2;
+    int mapperRegister3;
+    int mapperRegister4;
 };
 
 struct mapperTAMA5 {

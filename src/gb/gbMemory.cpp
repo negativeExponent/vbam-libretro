@@ -1011,29 +1011,54 @@ mapperHuC3 gbDataHuC3 = {
 mapperHuC3RTC gbRTCHuC3 = {
     0, // lastTime
     0, // DateTime
-    0, // WritingTime
     0, // ModeFlag
-    0 // ClockShift
+    0, // ClockShift
+    0, // Seconds
+    0, // reserved1
+    0, // reserved2
+    0, // reserved3
+    0  // reserved4
 };
 
-void memoryupdateHuC3Latch() {
-	uint64_t now = time(NULL);
-    uint64_t diff = now - gbRTCHuC3.mapperLastTime;
-
+void memoryUpdateHuC3Clock() {
+    time_t now = time(NULL);
+    time_t diff = now - gbRTCHuC3.mapperLastTime;
     if (diff > 0) {
-        unsigned minute = (diff / 60) % 1440;
-        unsigned day = (diff / 86400) & 0xFFF;
+        gbRTCHuC3.mapperSeconds += diff % 60;
+        if(gbRTCHuC3.mapperSeconds > 59) {
+            gbRTCHuC3.mapperSeconds -= 60;
+            gbRTCHuC3.mapperDateTime++;
+        }
 
-        gbRTCHuC3.mapperDateTime = (day << 12) | minute;
+        diff /= 60;
+
+        gbRTCHuC3.mapperDateTime += diff % 60;
+        if ((gbRTCHuC3.mapperDateTime & 0xFFF) >= 1440) {
+            gbRTCHuC3.mapperDateTime =
+                (gbRTCHuC3.mapperDateTime & 0xFFFF000) |
+                ((gbRTCHuC3.mapperDateTime & 0xFFF) - 1440);
+            gbRTCHuC3.mapperDateTime += 0x1000; // day counter ?
+        }
+
+        diff /= 60;
+
+        gbRTCHuC3.mapperDateTime += (diff % 24) * 60;
+        if ((gbRTCHuC3.mapperDateTime & 0xFFF) >= 1440) {
+            gbRTCHuC3.mapperDateTime =
+                (gbRTCHuC3.mapperDateTime & 0xFFFF000) |
+                ((gbRTCHuC3.mapperDateTime & 0xFFF) - 1440);
+            gbRTCHuC3.mapperDateTime += 0x1000; // day counter ?
+        }
+
+        diff /= 24;
+
+        gbRTCHuC3.mapperDateTime += (diff << 12);
+        if (((gbRTCHuC3.mapperDateTime & 0xFFF000) >> 12) > 356) {
+            gbRTCHuC3.mapperDateTime = gbRTCHuC3.mapperDateTime & 0xF000FFF;
+            gbRTCHuC3.mapperDateTime += 0x1000000; // year counter ????
+        }
     }
-}
-
-void memoryupdateHuC3Clock() {
-    uint64_t now = time(NULL);
-    unsigned minute = (gbRTCHuC3.mapperWritingTime & 0xFFF) % 1440;
-    unsigned day = (gbRTCHuC3.mapperWritingTime & 0xFFF000) >> 12;
-
-    gbRTCHuC3.mapperLastTime = now - minute * 60 - day * 86400;
+    gbRTCHuC3.mapperLastTime = now;
 }
 
 // HuC3 ROM write registers
@@ -1105,9 +1130,10 @@ void mapperHuC3RAM(uint16_t address, uint8_t value)
         }
     } else {
         if (gbDataHuC3.mapperRAMFlag == 0x0b) {
-            if (value == 0x62) {
-                gbDataHuC3.mapperRAMValue = 1;
-            } else {
+            //if (value == 0x62) {
+                //gbDataHuC3.mapperRAMValue = 1;
+            //} else
+            {
                 switch (value & 0xf0) {
                 case 0x10:
                     /*p = &gbDataHuC3.mapperRegister2;
@@ -1116,9 +1142,8 @@ void mapperHuC3RAM(uint16_t address, uint8_t value)
                         gbDataHuC3.mapperRegister1 = 0;*/
 
                     // read time
-                    memoryupdateHuC3Latch();
                     if (gbRTCHuC3.mapperModeFlag == HUC3_READ) {
-                        gbDataHuC3.mapperRAMValue = (gbRTCHuC3.mapperDateTime >> gbRTCHuC3.mapperClockShift) & 0x0F;
+                        gbDataHuC3.mapperRAMValue = ((gbRTCHuC3.mapperDateTime >> gbRTCHuC3.mapperClockShift) & 0x0F);
                         gbRTCHuC3.mapperClockShift += 4;
                         if (gbRTCHuC3.mapperClockShift > 24)
                             gbRTCHuC3.mapperClockShift = 0;
@@ -1134,14 +1159,12 @@ void mapperHuC3RAM(uint16_t address, uint8_t value)
                     // write time
                     if (gbRTCHuC3.mapperModeFlag == HUC3_WRITE) {
                         if (gbRTCHuC3.mapperClockShift == 0)
-                            gbRTCHuC3.mapperWritingTime = 0;
-                        if (gbRTCHuC3.mapperClockShift <= 24) {
-                            gbRTCHuC3.mapperWritingTime |= (value & 0x0F) << gbRTCHuC3.mapperClockShift;
+                            gbRTCHuC3.mapperDateTime = 0;
+                        if(gbRTCHuC3.mapperClockShift < 24) {
+                            gbRTCHuC3.mapperDateTime |= ((value & 0x0F) << gbRTCHuC3.mapperClockShift);
                             gbRTCHuC3.mapperClockShift += 4;
-                            if (gbRTCHuC3.mapperClockShift == 24) {
-                                memoryupdateHuC3Clock();
+                            if(gbRTCHuC3.mapperClockShift == 24)
                                 gbRTCHuC3.mapperModeFlag = HUC3_READ;
-                            }
                         }
                     }
                     break;
@@ -1157,29 +1180,27 @@ void mapperHuC3RAM(uint16_t address, uint8_t value)
                     gbDataHuC3.mapperRAMValue = 0;*/
 
                     // some kind of mode shift
-                    switch(value & 0x0F) {
-                    case 0x0:
-                        // shift reset?
+                    switch (value & 0x0F) {
+                    case 0x00: //  ?
                         gbRTCHuC3.mapperClockShift = 0;
                         break;
-                    case 0x3:
-                        // write time?
+                    case 0x03: // write time mode ?
                         gbRTCHuC3.mapperModeFlag = HUC3_WRITE;
                         gbRTCHuC3.mapperClockShift = 0;
                         break;
-                    case 0x7:
+                    case 0x07: // read time mode ?
                         gbRTCHuC3.mapperModeFlag = HUC3_READ;
                         gbRTCHuC3.mapperClockShift = 0;
                         break;
-                        // others are unimplemented so far
                     }
+                    memoryUpdateHuC3Clock();
                     break;
                 case 0x50:
                     //gbDataHuC3.mapperRegister1 = (gbDataHuC3.mapperRegister1 & 0x0f) | ((value << 4) & 0x0f);
                     break;
                 case 0x60:
                     gbRTCHuC3.mapperModeFlag = HUC3_READ; // ???
-                    gbDataHuC3.mapperRAMValue = 1;
+                    //gbDataHuC3.mapperRAMValue = 1;
                     break;
                 default:
                     //gbDataHuC3.mapperRAMValue = 1;
